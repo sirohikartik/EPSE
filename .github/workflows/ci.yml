@@ -29,7 +29,6 @@ jobs:
 
       - name: Build project
         run: |
-          find . -name "*.c" -print
           gcc -Wall -Wextra -Werror $(find . -name "*.c") -o epse
 
   syntax-check:
@@ -45,3 +44,14 @@ jobs:
             echo "Checking $file"
             gcc -Wall -Wextra -Werror -fsyntax-only "$file"
           done
+
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate HTML documentation
+        uses: Cyb3r-Jak3/html5validator-action@v7
+        with:
+          root: docs
