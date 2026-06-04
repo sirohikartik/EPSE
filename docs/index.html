@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protein FASTA Parser Documentation</title>
+</head>
+<body>
+
+    <h1>Protein FASTA Parser Documentation</h1>
+    <p>Welcome to the official documentation hub. This utility is a high-performance C-based engine designed to parse standard UniProt FASTA files and extract structured protein data sequences along with their respective metadata elements.</p>
+
+    <hr>
+
+    <h2>Table of Contents</h2>
+    <ul>
+        <li><a href="#installation">Installation</a></li>
+        <li><a href="#getting-started">Getting Started</a></li>
+        <li><a href="#parser-overview">Parser Architecture Overview</a></li>
+        <li><a href="#api-reference">API Reference</a></li>
+        <li><a href="#api-placeholders">API Reference Placeholders</a></li>
+        <li><a href="#contributing">Contributing Guide</a></li>
+    </ul>
+
+    <hr>
+
+    <div id="installation">
+        <h2>Installation</h2>
+        <p><em>[Placeholder: Minimal installation guidelines and setup instructions will go here.]</em></p>
+    </div>
+
+    <hr>
+
+    <div id="getting-started">
+        <h2>Getting Started</h2>
+        <p>This utility processes standard UniProt FASTA records to transform raw text sequences into organized data blocks.</p>
+
+        <h3>Basic Execution</h3>
+        <p>To execute the compiled parser binary, pass the source <code>.fasta</code> filepath followed by your designated target output directory:</p>
+        <p><strong>Execution Syntax:</strong></p>
+        <pre>./parser &lt;path_to_fasta&gt; &lt;output_folder&gt;</pre>
+
+        <p><strong>Example Command:</strong></p>
+        <pre>./parser uniprot_sprot.fasta /output_data</pre>
+
+        <h3>Expected Standard Output</h3>
+        <p>The console will stream real-time processing confirmations as records are processed:</p>
+        <pre>
+ID: 1
+Accession: Q91G67
+Sequence length: 480
+        </pre>
+    </div>
+
+    <hr>
+
+    <div id="parser-overview">
+        <h2>Parser Architecture Overview</h2>
+        <p>The core pipeline logic resides within <code>parser/parse.c</code>. It relies on a deterministic single-pass architecture to scan data records efficiently.</p>
+
+        <h3>How Ingestion Works</h3>
+        <ul>
+            <li><strong>Line Ingestion:</strong> Reads the input stream into a persistent 4096-byte memory buffer via <code>fgets</code> to safe-guard stack space.</li>
+            <li><strong>Header Detection:</strong> Isolates rows beginning with a <code>&gt;</code> character to split headers, immediately capturing the structural segments (Accession, Entry Name, Description, and Organism fields).</li>
+            <li><strong>Sequence Accumulation:</strong> Captures downstream multi-line string sequences and merges them into a resizing continuous block that doubles its heap capacity whenever a bound limit is reached.</li>
+        </ul>
+
+        <h3>Fixed Size Constraints</h3>
+        <p>To optimize execution speeds, raw fields map to the following explicit buffer boundaries:</p>
+        <ul>
+            <li><strong>Accession Strings:</strong> Maximum 32 characters.</li>
+            <li><strong>Entry Name Strings:</strong> Maximum 32 characters.</li>
+            <li><strong>Organism Identifiers:</strong> Maximum 32 characters.</li>
+            <li><strong>Description Field:</strong> Maximum 256 characters.</li>
+        </ul>
+    </div>
+
+    <hr>
+
+    <div id="api-reference">
+        <h2>API Reference</h2>
+        <p>Technical specifications for public function entrypoints and struct definitions managed inside the parser library.</p>
+
+        <h3>Primary Functions</h3>
+        <h4><code>parse_and_save()</code></h4>
+        <p>Invokes the full storage file parsing loop pipeline.</p>
+        <pre>void parse_and_save(char* filepath, char* folder_name);</pre>
+        <ul>
+            <li><code>filepath</code>: Points to the local source FASTA dataset.</li>
+            <li><code>folder_name</code>: Target filesystem directory for output file generation.</li>
+        </ul>
+
+        <h3>Data Layout Frameworks</h3>
+        <h4><code>Entry</code></h4>
+        <p>The core structure mapping standard header elements and sequence locations.</p>
+        <pre>
+typedef struct {
+    uint32_t id;
+    char accession[32];
+    char entry_name[32];
+    char description[256];
+    char organism[32];
+    sequence* seq;
+} Entry;
+        </pre>
+
+        <h4><code>ProteinEmbedding</code></h4>
+        <p>Allocated space tracking fixed vector dimensions for downstream processing tasks.</p>
+        <pre>
+typedef struct {
+    uint32_t protein_id;
+    float embedding[480]; 
+} ProteinEmbedding;
+        </pre>
+    </div>
+
+    <hr>
+
+    <div id="api-placeholders">
+        <h2>API Reference Placeholders</h2>
+        <p><em>[Placeholder: Additional API reference frameworks, minimal placeholders, and extended structure of documentation will go here.]</em></p>
+    </div>
+
+    <hr>
+
+    <div id="contributing">
+        <h2>Contributing Guide</h2>
+        <p>Contributions are highly appreciated! If you are modifying the codebase or updating the parsing structures, please follow these guidelines:</p>
+        <ol>
+            <li>Fork the repository and develop on a descriptive branch(e.g., <code>feat/refactor-headers</code>).</li>
+            <li>Ensure any structural adjustments follow the fixed bounds defined in the <code>Entry</code> data model layouts.</li>
+            <li>Keep modifications focused; individual Pull Requests should solve one explicit issue or feature addition at a time.</li>
+        </ol>
+    </div>
+
+</body>
+</html>
