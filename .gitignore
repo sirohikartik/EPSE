@@ -1,0 +1,8 @@
+/env
+a.out
+parse
+uniprot_sprot.fasta
+model/env
+.data
+esm2_t12_35M.pt
+/build

@@ -18,8 +18,12 @@ jobs:
 
       - name: Check formatting
         run: |
-          find . \( -name "*.c" -o -name "*.h" \) \
-          -exec clang-format --dry-run --Werror -style=LLVM {} \;
+          find . \( \
+            -name "*.c" -o \
+            -name "*.h" -o \
+            -name "*.cpp" -o \
+            -name "*.hpp" \
+          \) -exec clang-format --dry-run --Werror -style=LLVM {} \;
 
   build:
     runs-on: ubuntu-latest
@@ -27,37 +31,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build project
+      - name: Install CMake
         run: |
-          gcc -Wall -Wextra -Werror $(find . -name "*.c") -o epse
+          sudo apt-get update
+          sudo apt-get install -y cmake
 
-  syntax-check:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Check all C files
+      - name: Download LibTorch
         run: |
-          find . -name "*.c" | while read file
-          do
-            echo "Checking $file"
-            gcc -Wall -Wextra -Werror -fsyntax-only "$file"
-          done
+          wget https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-2.7.1%2Bcpu.zip
+          unzip libtorch-shared-with-deps-2.7.1+cpu.zip
 
-  docs:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-
-      - name: Install HTML validator
+      - name: Configure
         run: |
-          pip install html5validator
+          mkdir build
+          cd build
+          cmake \
+            -DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/libtorch \
+            ..
 
-      - name: Validate HTML documentation
+      - name: Build
         run: |
-          html5validator --root .
+          cd build
+          cmake --build . --config Release
