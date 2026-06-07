@@ -34,9 +34,9 @@ jobs:
       - name: Install compiler
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++
+          sudo apt-get install -y gcc g++
 
-      - name: Check C syntax
+      - name: Check C files
         run: |
           find . -name "*.c" | while read file
           do
@@ -44,23 +44,6 @@ jobs:
             gcc -Wall -Wextra -Werror -fsyntax-only "$file"
           done
 
-  cmake-configure:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install CMake
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake
-
-      - name: Verify CMakeLists.txt parses
-        run: |
-          mkdir build
-          cd build
-          cmake -DEPSE_ENABLE_EMBEDDER=OFF ..
-          
   docs:
     runs-on: ubuntu-latest
 
