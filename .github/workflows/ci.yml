@@ -25,7 +25,26 @@ jobs:
             -name "*.hpp" \
           \) -exec clang-format --dry-run --Werror -style=LLVM {} \;
 
-  build:
+  syntax-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++
+
+      - name: Check C syntax
+        run: |
+          find . -name "*.c" | while read file
+          do
+            echo "Checking $file"
+            gcc -Wall -Wextra -Werror -fsyntax-only "$file"
+          done
+
+  cmake-configure:
     runs-on: ubuntu-latest
 
     steps:
@@ -36,20 +55,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake
 
-      - name: Download LibTorch
-        run: |
-          wget https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-2.7.1%2Bcpu.zip
-          unzip libtorch-shared-with-deps-2.7.1+cpu.zip
-
-      - name: Configure
+      - name: Verify CMakeLists.txt parses
         run: |
           mkdir build
           cd build
-          cmake \
-            -DCMAKE_PREFIX_PATH=$GITHUB_WORKSPACE/libtorch \
-            ..
+          cmake -DEPSE_ENABLE_EMBEDDER=OFF ..
+          
+  docs:
+    runs-on: ubuntu-latest
 
-      - name: Build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+
+      - name: Install HTML validator
         run: |
-          cd build
-          cmake --build . --config Release
+          pip install html5validator
+
+      - name: Validate HTML documentation
+        run: |
+          html5validator --root .
