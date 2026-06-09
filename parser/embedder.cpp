@@ -34,7 +34,7 @@ std::vector<int64_t> tokenize(const char *sequence) {
     return tokenized;
 }
 
-int load_model(const char *model_path) {
+extern "C" int load_model(const char *model_path) {
     try {
         model = torch::jit::load(model_path);
         model.eval();
@@ -48,7 +48,7 @@ int load_model(const char *model_path) {
     }
 }
 
-void get_embedding(const char *sequence, float *embedding_out) {
+extern "C" void get_embedding(const char *sequence, float *embedding_out) {
 
     std::vector<int64_t> tokens = tokenize(sequence);
 
@@ -79,6 +79,6 @@ void get_embedding(const char *sequence, float *embedding_out) {
     }
 }
 
-void close_model() { model = torch::jit::script::Module(); }
+extern "C" void close_model() { model = torch::jit::script::Module(); }
 
 
