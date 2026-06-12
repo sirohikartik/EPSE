@@ -8,7 +8,7 @@
 #include <math.h>
 #include <float.h>
 
-#define SIMILARITY_THRESHOLD 0.90f // Adjust this threshold as needed
+// SIMILARITY_THRESHOLD is now passed as a runtime argument (see main)
 #define DIM 480
 
 typedef struct ProteinEmbedding {
@@ -78,7 +78,6 @@ void sequence_clear(sequence *s) {
 
 void sequence_free(sequence *s) {
     free(s->data);
-
     s->data = NULL;
     s->length = 0;
     s->capacity = 0;
@@ -87,12 +86,12 @@ void sequence_free(sequence *s) {
 // update centroid function - updates a centroid's average embedding 
 void update_centroid(Centroid *c, float* embedding){
     c->count++;
-    for(int i =0;i<480;i++){
-            c->centroid[i] += (embedding[i] - c->centroid[i])/c->count;
+    for(int i = 0; i < 480; i++){
+        c->centroid[i] += (embedding[i] - c->centroid[i]) / c->count;
     }
 }
 
-// cosing similarity score function
+// cosine similarity score function
 float cosine(Centroid *c, float* embedding) {
     float dot_product = 0.0f;
     float norm_c = 0.0f;
@@ -104,19 +103,15 @@ float cosine(Centroid *c, float* embedding) {
         norm_e += embedding[i] * embedding[i];
     }
 
-    // Prevent division by zero if either vector is entirely zeros
     if (norm_c == 0.0f || norm_e == 0.0f) {
         return 0.0f; 
     }
 
-    // Return the normalized cosine similarity
     return dot_product / (sqrtf(norm_c) * sqrtf(norm_e));
 }
-// main function starts here -
 
 
-
-void parse_and_save(char *filepath) {
+void parse_and_save(char *filepath, float threshold, char *data_dir) {
     if (filepath == NULL) {
         printf("\033[31;1;4mERROR: NULL filepath \033[0m\n");
         return;
@@ -128,19 +123,25 @@ void parse_and_save(char *filepath) {
         return;
     }
 
-    // Output files
-    FILE *csv = fopen(".data/proteins.csv", "w");
-    FILE *emb_fp = fopen(".data/embeddings.bin", "wb");
-    FILE *assign_fp = fopen(".data/assignments.bin", "wb"); 
-    FILE *cent_csv = fopen(".data/centroids.csv", "w"); // NEW: Centroids file
+    // Build output file paths dynamically based on data_dir
+    char proteins_path[256], emb_path[256], assign_path[256], cent_path[256];
+    snprintf(proteins_path, sizeof(proteins_path), "%s/proteins.csv",    data_dir);
+    snprintf(emb_path,      sizeof(emb_path),      "%s/embeddings.bin",  data_dir);
+    snprintf(assign_path,   sizeof(assign_path),    "%s/assignments.bin", data_dir);
+    snprintf(cent_path,     sizeof(cent_path),      "%s/centroids.csv",   data_dir);
+
+    FILE *csv       = fopen(proteins_path, "w");
+    FILE *emb_fp    = fopen(emb_path,      "wb");
+    FILE *assign_fp = fopen(assign_path,   "wb");
+    FILE *cent_csv  = fopen(cent_path,     "w");
 
     if (!csv || !emb_fp || !assign_fp || !cent_csv) {
-        printf("\033[31;1;4mERROR: Failed to open output files\033[0m\n");
-        if(csv) fclose(csv);
-        if(emb_fp) fclose(emb_fp);
+        printf("\033[31;1;4mERROR: Failed to open output files in %s\033[0m\n", data_dir);
+        if(csv)       fclose(csv);
+        if(emb_fp)    fclose(emb_fp);
         if(assign_fp) fclose(assign_fp);
-        if(cent_csv) fclose(cent_csv);
-        if(fp) fclose(fp);
+        if(cent_csv)  fclose(cent_csv);
+        if(fp)        fclose(fp);
         return;
     }
 
@@ -159,21 +160,16 @@ void parse_and_save(char *filepath) {
     ProteinEmbedding *embedding = malloc(sizeof(ProteinEmbedding));
     sequence *s = malloc(sizeof(sequence));
     
-    // Dynamic array for our existing centroids
     size_t centroid_capacity = 1000;
     size_t num_centroids = 0;
     Centroid *centroids = malloc(centroid_capacity * sizeof(Centroid));
 
     if (!entry || !embedding || !s || !centroids) {
         printf("\033[31;1;4mMalloc failed\033[0m\n");
-        if(csv) fclose(csv);
-        if(emb_fp) fclose(emb_fp);
-        if(assign_fp) fclose(assign_fp);
-        if(cent_csv) fclose(cent_csv);
-        if(fp) fclose(fp);
-        if(entry) free(entry);
+        fclose(csv); fclose(emb_fp); fclose(assign_fp); fclose(cent_csv); fclose(fp);
+        if(entry)     free(entry);
         if(embedding) free(embedding);
-        if(s) free(s);
+        if(s)         free(s);
         if(centroids) free(centroids);
         return;
     }
@@ -183,20 +179,10 @@ void parse_and_save(char *filepath) {
 
     int loaded = load_model("model/esm2_t12_35M.pt");
     if(loaded == -1) {
-            printf("Model could not be loaded");
-            if(csv) fclose(csv);
-        if(emb_fp) fclose(emb_fp);
-        if(assign_fp) fclose(assign_fp);
-        if(cent_csv) fclose(cent_csv);
-        if(fp) fclose(fp);
-        if(entry) free(entry);
-        if(embedding) free(embedding);
-        if(s) free(s);
-        if(centroids) free(centroids);
+        printf("Model could not be loaded\n");
+        fclose(csv); fclose(emb_fp); fclose(assign_fp); fclose(cent_csv); fclose(fp);
+        free(entry); free(embedding); free(s); free(centroids);
         return;
-
-
-
     }
     sequence_init(s);
 
@@ -214,7 +200,7 @@ void parse_and_save(char *filepath) {
                 fwrite(embedding, sizeof(ProteinEmbedding), 1, emb_fp);
 
                 // 3. Compute similarity to existing centroids
-                float best_score = -2.0f; // Cosine ranges from -1 to 1
+                float best_score = -2.0f;
                 int best_centroid_idx = -1;
 
                 for (size_t c = 0; c < num_centroids; c++) {
@@ -228,13 +214,11 @@ void parse_and_save(char *filepath) {
                 Assignment assign;
                 assign.protein_id = entry->id;
 
-                // 4 & 5. Find best centroid and check threshold
-                if (best_centroid_idx != -1 && best_score >= SIMILARITY_THRESHOLD) {
-                    // YES: Assign to existing centroid & update running average
+                // 4. Use runtime threshold (not hardcoded)
+                if (best_centroid_idx != -1 && best_score >= threshold) {
                     assign.cluster_id = centroids[best_centroid_idx].centroid_id;
                     update_centroid(&centroids[best_centroid_idx], embedding->embedding);
                 } else {
-                    // NO: Create new centroid
                     if (num_centroids >= centroid_capacity) {
                         centroid_capacity *= 2;
                         centroids = realloc(centroids, centroid_capacity * sizeof(Centroid));
@@ -247,14 +231,11 @@ void parse_and_save(char *filepath) {
                     
                     centroids[num_centroids] = new_c;
                     assign.cluster_id = new_c.centroid_id;
-                    
                     num_centroids++;
                 }
 
-                // 6. Save assignment record
                 fwrite(&assign, sizeof(Assignment), 1, assign_fp);
 
-                // Save metadata to CSV
                 fprintf(csv, "%u,\"%s\",\"%s\",\"%s\",\"%s\",%zu\n", entry->id, entry->accession,
                         entry->entry_name, entry->description, entry->organism, s->length);
 
@@ -267,7 +248,6 @@ void parse_and_save(char *filepath) {
             id++;
             entry->id = id;
 
-            // --- Header parsing logic ---
             int ptr = 4;
             char accession[32];
             int i = 0;
@@ -275,8 +255,7 @@ void parse_and_save(char *filepath) {
                 accession[i++] = BUFFER[ptr++];
             }
             accession[i] = '\0';
-
-            ptr++; 
+            ptr++;
 
             char entry_name[32];
             i = 0;
@@ -284,8 +263,7 @@ void parse_and_save(char *filepath) {
                 entry_name[i++] = BUFFER[ptr++];
             }
             entry_name[i] = '\0';
-
-            ptr++; 
+            ptr++;
 
             char descp[256];
             i = 0;
@@ -293,8 +271,8 @@ void parse_and_save(char *filepath) {
                 descp[i++] = BUFFER[ptr++];
             }
             descp[i] = '\0';
-            
-            ptr += 3; 
+            ptr += 3;
+
             char org[256];
             i = 0;
             while (!(BUFFER[ptr] == 'O' && BUFFER[ptr + 1] == 'X' && BUFFER[ptr + 2] == '=') && BUFFER[ptr] != '\0' && BUFFER[ptr] != '\n') {
@@ -332,7 +310,7 @@ void parse_and_save(char *filepath) {
         Assignment assign;
         assign.protein_id = entry->id;
 
-        if (best_centroid_idx != -1 && best_score >= SIMILARITY_THRESHOLD) {
+        if (best_centroid_idx != -1 && best_score >= threshold) {
             assign.cluster_id = centroids[best_centroid_idx].centroid_id;
             update_centroid(&centroids[best_centroid_idx], embedding->embedding);
         } else {
@@ -356,7 +334,7 @@ void parse_and_save(char *filepath) {
         printf("Saved protein %u (%s) -> Cluster %u\n", entry->id, entry->accession, assign.cluster_id);
     }
 
-    // NEW: Dump the final centroids array to centroids.csv
+    // Dump final centroids to centroids.csv
     for (size_t c = 0; c < num_centroids; c++) {
         fprintf(cent_csv, "%u,%u", centroids[c].centroid_id, centroids[c].count);
         for (int i = 0; i < DIM; i++) {
@@ -365,12 +343,11 @@ void parse_and_save(char *filepath) {
         fprintf(cent_csv, "\n");
     }
 
-    // Cleanup
     sequence_free(s);
     free(s);
     free(entry);
     free(embedding);
-    free(centroids); 
+    free(centroids);
 
     fclose(csv);
     fclose(emb_fp);
@@ -379,7 +356,33 @@ void parse_and_save(char *filepath) {
     fclose(fp);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    float threshold = 0.90f; // default
+
+    if (argc >= 2) {
+        threshold = (float)atof(argv[1]);
+        if (threshold <= 0.0f || threshold >= 1.0f) {
+            printf("ERROR: threshold must be between 0.0 and 1.0 (e.g. ./epse 0.94)\n");
+            return 1;
+        }
+    }
+
+    char *fasta_path = "uniprot_sprot.fasta"; // default dataset
+    if (argc >= 3) {
+        fasta_path = argv[2];
+    }
+
+    printf("=== EPSE Clustering ===\n");
+    printf("Threshold : %.2f\n", threshold);
+    printf("Dataset   : %s\n\n", fasta_path);
+
+    // Create output dir named by threshold e.g. .data/threshold_0.94/
+    char data_dir[64];
+    snprintf(data_dir, sizeof(data_dir), ".data/threshold_%.2f", threshold);
+
     mkdir(".data", 0755);
-    parse_and_save("uniprot_sprot.fasta");
+    mkdir(data_dir, 0755);
+
+    parse_and_save(fasta_path, threshold, data_dir);
+    return 0;
 }
