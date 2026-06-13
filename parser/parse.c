@@ -264,7 +264,7 @@ void parse_and_save(char *filepath, float threshold, char *data_dir) {
             while (
                 BUFFER[ptr] != '|' &&
                 BUFFER[ptr] != '\0' &&
-                i < sizeof(accession) - 1
+                i < (int)sizeof(accession) - 1
             ) {
                 accession[i++] = BUFFER[ptr++];
             }
