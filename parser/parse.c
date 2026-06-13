@@ -8,6 +8,11 @@
 #include <math.h>
 #include <float.h>
 
+// Define _WIN32 for Windows compatibility for mkdir
+#ifdef _WIN32
+    #include <io.h>
+    #define mkdir(path, mode) _mkdir(path)
+#endif
 // SIMILARITY_THRESHOLD is now passed as a runtime argument (see main)
 #define DIM 480
 
@@ -221,7 +226,12 @@ void parse_and_save(char *filepath, float threshold, char *data_dir) {
                 } else {
                     if (num_centroids >= centroid_capacity) {
                         centroid_capacity *= 2;
-                        centroids = realloc(centroids, centroid_capacity * sizeof(Centroid));
+                        Centroid *tmp = realloc(centroids, centroid_capacity * sizeof(Centroid));
+                        if (tmp == NULL) {
+                            printf("Failed to expand centroid array\n");
+                            return; 
+                        }
+                        centroids = tmp;
                     }
                     
                     Centroid new_c;
@@ -251,7 +261,11 @@ void parse_and_save(char *filepath, float threshold, char *data_dir) {
             int ptr = 4;
             char accession[32];
             int i = 0;
-            while (BUFFER[ptr] != '|' && BUFFER[ptr] != '\0') {
+            while (
+                BUFFER[ptr] != '|' &&
+                BUFFER[ptr] != '\0' &&
+                i < sizeof(accession) - 1
+            ) {
                 accession[i++] = BUFFER[ptr++];
             }
             accession[i] = '\0';
@@ -316,7 +330,17 @@ void parse_and_save(char *filepath, float threshold, char *data_dir) {
         } else {
             if (num_centroids >= centroid_capacity) {
                 centroid_capacity *= 2;
-                centroids = realloc(centroids, centroid_capacity * sizeof(Centroid));
+                Centroid *tmp = realloc(
+                    centroids,
+                    centroid_capacity * sizeof(Centroid)
+                );
+
+                if(tmp == NULL){
+                    printf("Failed to expand centroid array\n");
+                    return;
+                }
+
+                centroids = tmp;
             }
             Centroid new_c;
             new_c.centroid_id = num_centroids;
