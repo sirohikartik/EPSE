@@ -229,7 +229,7 @@ void parse_and_save(char *filepath, float threshold, char *data_dir) {
                         Centroid *tmp = realloc(centroids, centroid_capacity * sizeof(Centroid));
                         if (tmp == NULL) {
                             printf("Failed to expand centroid array\n");
-                            return; 
+                            goto cleanup;
                         }
                         centroids = tmp;
                     }
@@ -337,7 +337,7 @@ void parse_and_save(char *filepath, float threshold, char *data_dir) {
 
                 if(tmp == NULL){
                     printf("Failed to expand centroid array\n");
-                    return;
+                    goto cleanup;
                 }
 
                 centroids = tmp;
@@ -367,17 +367,20 @@ void parse_and_save(char *filepath, float threshold, char *data_dir) {
         fprintf(cent_csv, "\n");
     }
 
-    sequence_free(s);
-    free(s);
-    free(entry);
-    free(embedding);
-    free(centroids);
+    cleanup:
+        sequence_free(s);
+        free(s);
+        free(entry);
+        free(embedding);
+        free(centroids);
 
-    fclose(csv);
-    fclose(emb_fp);
-    fclose(assign_fp);
-    fclose(cent_csv);
-    fclose(fp);
+        fclose(csv);
+        fclose(emb_fp);
+        fclose(assign_fp);
+        fclose(cent_csv);
+        fclose(fp);
+
+        return;
 }
 
 int main(int argc, char *argv[]) {
