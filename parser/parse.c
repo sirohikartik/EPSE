@@ -7,41 +7,9 @@
 #include "embedder.h"
 #include <math.h>
 #include <float.h>
-
+#include "../src/parse.h"
 // SIMILARITY_THRESHOLD is now passed as a runtime argument (see main)
 #define DIM 480
-
-typedef struct ProteinEmbedding {
-    uint32_t protein_id;
-    float embedding[DIM];
-} ProteinEmbedding;
-
-typedef struct {
-    char *data;
-    size_t capacity;
-    size_t length;
-} sequence;
-
-typedef struct {
-    uint32_t id;
-    char accession[32];
-    char entry_name[32];
-    char description[256];
-    char organism[256];
-    sequence *seq;
-} Entry;
-
-
-typedef struct {
-    uint32_t centroid_id;
-    uint32_t count;
-    float centroid[480];
-} Centroid;
-
-typedef struct {
-    uint32_t protein_id;
-    uint32_t cluster_id;
-} Assignment;
 
 // Utilities for sequence dynamic string container
 void sequence_init(sequence *s) {
@@ -111,6 +79,7 @@ float cosine(Centroid *c, float* embedding) {
 }
 
 
+#ifndef UNIT_TEST
 void parse_and_save(char *filepath, float threshold, char *data_dir) {
     if (filepath == NULL) {
         printf("\033[31;1;4mERROR: NULL filepath \033[0m\n");
@@ -386,3 +355,4 @@ int main(int argc, char *argv[]) {
     parse_and_save(fasta_path, threshold, data_dir);
     return 0;
 }
+#endif

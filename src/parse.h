@@ -1,38 +1,53 @@
 #ifndef PARSE_H
 #define PARSE_H
 
+#include <stdint.h>
+#include <stddef.h>
+
+#define DIM 480
+
 typedef struct {
-    double *values;
-    int dim;
-} Embedding;
+    char *data;
+    size_t capacity;
+    size_t length;
+} sequence;
 
-/**
- * Parse embeddings from a file.
- * 
- * @param filename Path to the input file
- * @param embeddings Output pointer to array of embeddings
- * @param count Output number of embeddings parsed
- * @param dim Output dimension of each embedding
- * @return 0 on success, -1 on failure
- */
-int parse_embeddings(const char *filename, Embedding **embeddings, int *count, int *dim);
+typedef struct {
+    uint32_t id;
+    char accession[32];
+    char entry_name[32];
+    char description[256];
+    char organism[256];
+    sequence *seq;
+} Entry;
 
-/**
- * Compute the centroid of a set of embeddings.
- * 
- * @param embeddings Array of embeddings
- * @param count Number of embeddings
- * @param dim Dimension of each embedding
- * @return Pointer to centroid array (caller must free), NULL on failure
- */
-double *compute_centroid(Embedding *embeddings, int count, int dim);
+typedef struct {
+    uint32_t centroid_id;
+    uint32_t count;
+    float centroid[DIM];
+} Centroid;
 
-/**
- * Free an array of embeddings.
- * 
- * @param embeddings Array of embeddings to free
- * @param count Number of embeddings
- */
-void free_embeddings(Embedding *embeddings, int count);
+typedef struct {
+    uint32_t protein_id;
+    float embedding[DIM];
+} ProteinEmbedding;
 
-#endif /* PARSE_H */
+typedef struct {
+    uint32_t protein_id;
+    uint32_t cluster_id;
+} Assignment;
+
+/* sequence helpers */
+void sequence_init(sequence *s);
+void sequence_append(sequence *s, const char *text);
+void sequence_clear(sequence *s);
+void sequence_free(sequence *s);
+
+/* clustering helpers */
+void update_centroid(Centroid *c, float *embedding);
+float cosine(Centroid *c, float *embedding);
+
+/* pipeline */
+void parse_and_save(char *filepath, float threshold, char *data_dir);
+
+#endif
