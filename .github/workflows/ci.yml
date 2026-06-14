@@ -61,30 +61,29 @@ jobs:
         run: |
           html5validator --root .
 
+  ctest:
+    runs-on: ubuntu-latest
 
-    ctest:
-      runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      steps:
-        -uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
 
-        -name: Install dependencies
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y cmake build-essential
+      - name: Configure
+        run: |
+          mkdir build
+          cd build
+          cmake ..
 
-        -name: Configure
-          run: |
-            mkdir build
-            cd build
-            cmake ..
+      - name: Build
+        run: |
+          cd build
+          make -j$(nproc)
 
-        -name: Build
-          run: |
-            cd build
-            make -j$(nproc)
-
-        -name: Run tests
-          run: |
-            cd build
-            ctest --output-on-failure
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure
