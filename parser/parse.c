@@ -7,7 +7,7 @@
 #include "embedder.h"
 #include <math.h>
 #include <float.h>
-
+#include "../src/parse.h"
 // Define _WIN32 for Windows compatibility for mkdir
 #ifdef _WIN32
     #include <io.h>
