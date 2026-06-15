@@ -1,3 +1,4 @@
+
 from transformers import AutoTokenizer, AutoModel
 import torch
 
@@ -25,6 +26,7 @@ class ESMWrapper(torch.nn.Module):
         return outputs.last_hidden_state
 
 wrapped_model = ESMWrapper(model)
+wrapped_model = wrapped_model.to('mps')
 wrapped_model.eval()
 
 print("Creating sample input...")
@@ -35,7 +37,7 @@ inputs = tokenizer(
     sequence,
     return_tensors="pt"
 )
-
+inputs = {k: v.to("mps") for k, v in inputs.items()}
 print("Tracing model...")
 
 with torch.no_grad():
@@ -47,11 +49,23 @@ with torch.no_grad():
         )
     )
 
-print("Saving TorchScript model...")
+traced_model.save("esm2_mps.pt")
 
-traced_model.save("esm2_t12_35M.pt")
 
-print("Saved: esm2_t12_35M.pt")
+loaded = torch.jit.load("esm2_mps.pt")
+loaded = loaded.to("mps")
 
-print("Saving tokenizer...")
-tokenizer.save_pretrained("./esm2_t12_35M_tokenizer")
+inputs = tokenizer(
+    "MKTVRQERLKSIVRILERSKEPV",
+    return_tensors="pt"
+)
+
+inputs = {k: v.to("mps") for k, v in inputs.items()}
+
+with torch.no_grad():
+    out = loaded(
+        inputs["input_ids"],
+        inputs["attention_mask"]
+    )
+
+print(out.device)

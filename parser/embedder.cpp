@@ -37,6 +37,19 @@ std::vector<int64_t> tokenize(const char *sequence) {
 extern "C" int load_model(const char *model_path) {
     try {
         model = torch::jit::load(model_path);
+        try{  
+        model.to(torch::kMPS);
+        
+        for (const auto& p : model.parameters()) {
+    std::cout << p.device() << "\n";
+    break;
+}
+
+
+        }
+        catch(const c10:: Error & e) {
+            std::cout<<"Model unable to load onto MPS:"<<e.what()<<"\n";
+        }
         model.eval();
         std::cout << "Model loaded successfully\n";
 
@@ -52,10 +65,17 @@ extern "C" void get_embedding(const char *sequence, float *embedding_out) {
 
     std::vector<int64_t> tokens = tokenize(sequence);
 
-    auto input_ids = torch::tensor(tokens, torch::kInt64).unsqueeze(0);
+    //auto input_ids = torch::tensor(tokens, torch::kInt64).unsqueeze(0);
 
-    auto attention_mask = torch::ones_like(input_ids);
+    //auto attention_mask = torch::ones_like(input_ids);
+    auto input_ids =
+    torch::tensor(tokens, torch::kInt64)
+        .unsqueeze(0)
+        .to(torch::kMPS);
 
+    auto attention_mask =
+    torch::ones_like(input_ids)
+        .to(torch::kMPS);
     std::vector<torch::jit::IValue> inputs;
 
     inputs.push_back(input_ids);
@@ -65,8 +85,8 @@ extern "C" void get_embedding(const char *sequence, float *embedding_out) {
 
     auto output = model.forward(inputs);
 
-    auto hidden = output.toTensor();
 
+    auto hidden = output.toTensor().to(torch::kCPU);
     auto pooled = hidden.mean(1);
 
     auto flat = pooled.squeeze(0).contiguous();
