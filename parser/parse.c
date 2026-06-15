@@ -151,7 +151,7 @@ void parse_and_save(char *filepath, float threshold, char *data_dir) {
     uint32_t id = 0;
     int first_protein = 1;
 
-    int loaded = load_model("model/esm2_t12_35M.pt");
+    int loaded = load_model("model/esm2_mps.pt");
     if(loaded == -1) {
         printf("Model could not be loaded\n");
         fclose(csv); fclose(emb_fp); fclose(assign_fp); fclose(cent_csv); fclose(fp);
