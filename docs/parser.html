@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPSE Documentation</title>
+
+    <style>
+        body {
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+
+        h1 {
+            margin-bottom: 0;
+        }
+
+        h2 {
+            margin-top: 40px;
+        }
+
+        h3 {
+            margin-top: 25px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: Consolas, monospace;
+        }
+
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+
+        a {
+            color: #0066cc;
+        }
+
+        ul, ol {
+            padding-left: 25px;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 35px 0;
+        }
+
+        .toc ul {
+            margin-top: 10px;
+        }
+
+        .section {
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+
+<main class="content">
+  <h1>Embedding generation phase</h1>
+  <p>This page describes the embedding generation phase: how inputs are parsed, normalized, and converted into vectors.</p>
+  <h2>Pipeline</h2>
+  <ol>
+    <li>Ingest source content</li>
+    <li>Parse and normalize text units</li>
+    <li>Generate embeddings via the project embedding functions</li>
+    <li>Persist or serve vectors for retrieval</li>
+  </ol>
+  <h2>Functions involved</h2>
+  <ul>
+    <li><code>get_embeddings_batch</code> — defined in <code>parser\parse.py</code></li>
+
+  </ul>
+  <h2>Insights</h2>
+  <p>Each stage should stay side-effect light and testable. When the backend model changes, re-embed consistently rather than mixing vector spaces.</p>
+  <p><a href="index.html">Home</a></p>
+</main>
+</body>
+</html>
