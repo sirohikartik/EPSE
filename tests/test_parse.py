@@ -23,18 +23,29 @@ def test_parse_fasta():
         if os.path.exists(test_fasta):
             os.remove(test_fasta)
 
+def test_parse_and_save_mock(tmp_path):
+    test_fasta = tmp_path / "test_mock.fasta"
+    test_fasta.write_text(">db|p1|n1 d1 OS=O1 OX=1\nMKTV\n>db|p2|n2 d2 OS=O2 OX=2\nMALW\n")
+    data_dir = str(tmp_path / "mock_output_data")
+
+    parse_and_save(str(test_fasta), threshold=2, data_dir=data_dir, use_mock=True)
+
+    assert os.path.exists(os.path.join(data_dir, "proteins.csv"))
+    assert os.path.exists(os.path.join(data_dir, "embeddings.bin"))
+    assert os.path.exists(os.path.join(data_dir, "assignments.bin"))
+    assert os.path.exists(os.path.join(data_dir, "centroids.csv"))
+    assert os.path.exists(os.path.join(data_dir, "cluster_index.json"))
+
+
 def test_parse_and_save_flow(tmp_path):
     # Setup a small fasta file for integration testing
     test_fasta = tmp_path / "test_integration.fasta"
     test_fasta.write_text(">db|p1|n1 d1 OS=O1 OX=1\nMKTV\n")
     
-    # We use a very low threshold to ensure clustering works as expected
+    # We use a threshold to ensure clustering works as expected
     threshold = 0.1
     data_dir = str(tmp_path / "output_data")
     
-    # Since parse_and_save loads a large model, we might want to mock the model
-    # but for a basic integration test, we'll check if it creates the files.
-    # Note: This test might be slow because it loads the ESM2 model.
     try:
         parse_and_save(str(test_fasta), threshold, data_dir)
         
@@ -42,6 +53,7 @@ def test_parse_and_save_flow(tmp_path):
         assert os.path.exists(os.path.join(data_dir, "embeddings.bin"))
         assert os.path.exists(os.path.join(data_dir, "assignments.bin"))
         assert os.path.exists(os.path.join(data_dir, "centroids.csv"))
+        assert os.path.exists(os.path.join(data_dir, "cluster_index.json"))
     except Exception as e:
         pytest.fail(f"parse_and_save failed: {e}")
 
