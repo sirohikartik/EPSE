@@ -16,8 +16,6 @@ Instead of keeping large protein embedding sets permanently in memory, EPSE part
   Two-stage query pipeline performs centroid ranking followed by selective disk reads of relevant clusters, avoiding full-database RAM ingestion.
 - Multi-format output:
   Supports tabular and JSON outputs with query latency breakdown and search-space pruning metrics.
-- Complete backward compatibility:
-  Maintains backward compatibility with earlier EPSE dataset formats and the parser entrypoint.
 
 ## How It Works
 
@@ -49,9 +47,6 @@ EPSE/
 │   ├── storage.py       # Disk-backed binary storage and inverted index
 │   ├── search.py        # Two-stage selective-load search engine
 │   └── cli.py           # Unified command-line interface (index, search, info)
-├── parser/
-│   ├── __init__.py      # Package initialization
-│   └── parse.py         # Backward-compatible script wrapper
 ├── docs/
 │   ├── index.html       # Documentation portal
 │   ├── parser.html      # FASTA & embedder technical guide
@@ -64,8 +59,7 @@ EPSE/
 │   ├── test_emeans.py   # E-Means algorithm and scaling law tests
 │   ├── test_storage.py  # Binary storage and random access tests
 │   ├── test_search.py   # Two-stage search integration tests
-│   ├── test_cli.py      # CLI integration tests
-│   └── test_parse.py    # Compatibility pipeline tests
+│   └── test_cli.py      # CLI integration tests
 ├── model/
 │   └── getmodel.py      # CPU model export and tracing utility
 ├── pyproject.toml       # Python package configuration

@@ -37,4 +37,4 @@ epse = "epse.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["epse*", "parser*"]
+include = ["epse*"]
