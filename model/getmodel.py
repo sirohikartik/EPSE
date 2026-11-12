@@ -1,17 +1,11 @@
+"""Script to download and TorchScript-trace ESM-2 on CPU."""
 
-from transformers import AutoTokenizer, AutoModel
+import argparse
 import torch
+from transformers import AutoTokenizer, AutoModel
 
 MODEL_NAME = "facebook/esm2_t12_35M_UR50D"
 
-print("Loading tokenizer...")
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-
-print("Loading model...")
-model = AutoModel.from_pretrained(MODEL_NAME)
-model.eval()
-
-print("Creating wrapper...")
 
 class ESMWrapper(torch.nn.Module):
     def __init__(self, model):
@@ -21,51 +15,45 @@ class ESMWrapper(torch.nn.Module):
     def forward(self, input_ids, attention_mask):
         outputs = self.model(
             input_ids=input_ids,
-            attention_mask=attention_mask
+            attention_mask=attention_mask,
         )
         return outputs.last_hidden_state
 
-wrapped_model = ESMWrapper(model)
-wrapped_model = wrapped_model.to('mps')
-wrapped_model.eval()
 
-print("Creating sample input...")
+def main():
+    parser = argparse.ArgumentParser(description="Export traced ESM-2 model on CPU")
+    parser.add_argument("--output", "-o", default="esm2_cpu.pt", help="Path to save TorchScript model")
+    parser.add_argument("--device", "-d", default="cpu", help="Device to trace on (defaults to cpu)")
+    args = parser.parse_args()
 
-sequence = "MKTVRQERLKSIVRILERSKEPV"
+    device = torch.device(args.device)
+    print(f"Loading tokenizer ({MODEL_NAME})...")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
-inputs = tokenizer(
-    sequence,
-    return_tensors="pt"
-)
-inputs = {k: v.to("mps") for k, v in inputs.items()}
-print("Tracing model...")
+    print(f"Loading model on {device}...")
+    base_model = AutoModel.from_pretrained(MODEL_NAME)
+    base_model.eval()
 
-with torch.no_grad():
-    traced_model = torch.jit.trace(
-        wrapped_model,
-        (
-            inputs["input_ids"],
-            inputs["attention_mask"]
+    wrapped_model = ESMWrapper(base_model).to(device)
+    wrapped_model.eval()
+
+    sample_sequence = "MKTVRQERLKSIVRILERSKEPV"
+    inputs = tokenizer(sample_sequence, return_tensors="pt")
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+
+    print("Tracing model with TorchScript...")
+    with torch.no_grad():
+        traced_model = torch.jit.trace(
+            wrapped_model,
+            (
+                inputs["input_ids"],
+                inputs["attention_mask"],
+            ),
         )
-    )
 
-traced_model.save("esm2_mps.pt")
+    traced_model.save(args.output)
+    print(f"Successfully saved traced CPU model to {args.output}")
 
 
-loaded = torch.jit.load("esm2_mps.pt")
-loaded = loaded.to("mps")
-
-inputs = tokenizer(
-    "MKTVRQERLKSIVRILERSKEPV",
-    return_tensors="pt"
-)
-
-inputs = {k: v.to("mps") for k, v in inputs.items()}
-
-with torch.no_grad():
-    out = loaded(
-        inputs["input_ids"],
-        inputs["attention_mask"]
-    )
-
-print(out.device)
+if __name__ == "__main__":
+    main()
