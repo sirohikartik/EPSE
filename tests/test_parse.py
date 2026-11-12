@@ -48,4 +48,4 @@ def test_parse_and_save_flow(tmp_path):
 if __name__ == "__main__":
     # Allow running directly for quick check
     pytest.main([__file__])
-EOF"
+
