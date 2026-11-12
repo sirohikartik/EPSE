@@ -8,9 +8,11 @@ __version__ = "0.2.0"
 
 from .fasta import parse_fasta, UniversalFastaEntry
 from .embedder import ProteinEmbedder
+from .emeans import EMeansClustering
 
 __all__ = [
     "parse_fasta",
     "UniversalFastaEntry",
     "ProteinEmbedder",
+    "EMeansClustering",
 ]
