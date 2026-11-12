@@ -10,6 +10,7 @@ from .fasta import parse_fasta, UniversalFastaEntry
 from .embedder import ProteinEmbedder
 from .emeans import EMeansClustering
 from .storage import IndexStorage
+from .search import ProteinSearchEngine, SearchResult, SearchMetrics
 
 __all__ = [
     "parse_fasta",
@@ -17,4 +18,7 @@ __all__ = [
     "ProteinEmbedder",
     "EMeansClustering",
     "IndexStorage",
+    "ProteinSearchEngine",
+    "SearchResult",
+    "SearchMetrics",
 ]
