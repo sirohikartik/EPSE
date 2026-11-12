@@ -1,0 +1,7 @@
+# Core CPU dependencies for EPSE
+torch>=2.0.0
+transformers>=4.30.0
+numpy>=1.22.0
+
+# Optional test and vector search dependencies
+pytest>=7.0.0
