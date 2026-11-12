@@ -6,3 +6,12 @@ model/env
 .data
 esm2_t12_35M.pt
 /build
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+dist/
+.coverage
+htmlcov/
+
