@@ -1,0 +1,33 @@
+"""Tests for CPU protein embedder."""
+
+import numpy as np
+import pytest
+from epse.embedder import ProteinEmbedder
+
+
+def test_mock_embedder_shapes_and_normalization():
+    embedder = ProteinEmbedder(use_mock=True, embedding_dim=128, normalize=True)
+    seqs = ["MKTVRQERLK", "MALWMRLLPLLALLALWGPDPAAA"]
+    embs = embedder.embed_sequences(seqs)
+
+    assert embs.shape == (2, 128)
+    assert embs.dtype == np.float32
+
+    # Verify L2 normalization
+    for i in range(len(seqs)):
+        norm = np.linalg.norm(embs[i])
+        assert pytest.approx(norm, abs=1e-5) == 1.0
+
+
+def test_embed_single():
+    embedder = ProteinEmbedder(use_mock=True, embedding_dim=64)
+    emb = embedder.embed_single("MKTVRQERLK")
+
+    assert emb.shape == (64,)
+    assert isinstance(emb, np.ndarray)
+
+
+def test_empty_sequences():
+    embedder = ProteinEmbedder(use_mock=True, embedding_dim=64)
+    embs = embedder.embed_sequences([])
+    assert embs.shape == (0, 64)
