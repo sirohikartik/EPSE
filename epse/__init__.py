@@ -7,8 +7,10 @@ low-memory similarity search over large protein databases on CPU.
 __version__ = "0.2.0"
 
 from .fasta import parse_fasta, UniversalFastaEntry
+from .embedder import ProteinEmbedder
 
 __all__ = [
     "parse_fasta",
     "UniversalFastaEntry",
+    "ProteinEmbedder",
 ]

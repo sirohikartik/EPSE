@@ -1,0 +1,146 @@
+"""CPU-optimized protein sequence embedder using ESM-2 or mock representations.
+
+Designed specifically for CPU execution on resource-constrained systems,
+enforcing torch CPU device, thread controls, batching, and L2 normalization.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Sequence, Union, Optional
+import numpy as np
+import torch
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_MODEL_NAME = "facebook/esm2_t12_35M_UR50D"
+DEFAULT_EMBEDDING_DIM = 480
+
+
+class ProteinEmbedder:
+    """Generates dense vector representations for protein sequences on CPU."""
+
+    def __init__(
+        self,
+        model_name: str = DEFAULT_MODEL_NAME,
+        num_threads: Optional[int] = None,
+        normalize: bool = True,
+        use_mock: bool = False,
+        embedding_dim: int = DEFAULT_EMBEDDING_DIM,
+    ):
+        """Initializes the CPU protein embedder.
+
+        Args:
+            model_name: HuggingFace model identifier for ESM-2.
+            num_threads: Number of PyTorch CPU threads (defaults to torch default).
+            normalize: Whether to L2-normalize embeddings (ideal for cosine similarity).
+            use_mock: If True, uses deterministic hash/n-gram embeddings for testing without downloading weights.
+            embedding_dim: Embedding dimension (480 for esm2_t12_35M).
+        """
+        self.model_name = model_name
+        self.device = torch.device("cpu")
+        self.normalize = normalize
+        self.use_mock = use_mock
+        self.embedding_dim = embedding_dim
+        self._model = None
+        self._tokenizer = None
+
+        if num_threads is not None and num_threads > 0:
+            torch.set_num_threads(num_threads)
+
+        if not self.use_mock:
+            self._init_model()
+
+    def _init_model(self) -> None:
+        """Loads ESM-2 model and tokenizer onto CPU."""
+        logger.info("Initializing ESM-2 model (%s) on CPU...", self.model_name)
+        from transformers import AutoTokenizer, AutoModel
+
+        self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self._model = AutoModel.from_pretrained(self.model_name)
+        self._model.to(self.device)
+        self._model.eval()
+
+        # Update dimension from model configuration if available
+        if hasattr(self._model.config, "hidden_size"):
+            self.embedding_dim = self._model.config.hidden_size
+
+    def _mock_embed(self, sequences: Sequence[str]) -> np.ndarray:
+        """Generates deterministic pseudo-embeddings for testing without heavy model weights."""
+        rng = np.random.RandomState(42)
+        embeddings = np.zeros((len(sequences), self.embedding_dim), dtype=np.float32)
+
+        for i, seq in enumerate(sequences):
+            # Seed based on sequence content for determinism
+            seq_seed = sum(ord(c) * (j + 1) for j, c in enumerate(seq[:64])) % (2**31 - 1)
+            local_rng = np.random.RandomState(seq_seed)
+            vec = local_rng.randn(self.embedding_dim).astype(np.float32)
+            if self.normalize:
+                norm = np.linalg.norm(vec)
+                if norm > 0:
+                    vec = vec / norm
+            embeddings[i] = vec
+
+        return embeddings
+
+    def embed_sequences(
+        self,
+        sequences: Sequence[str],
+        batch_size: int = 8,
+        max_length: int = 1024,
+    ) -> np.ndarray:
+        """Computes embeddings for a list of protein sequences on CPU.
+
+        Args:
+            sequences: List or sequence of amino acid strings.
+            batch_size: Number of sequences to process concurrently in a CPU batch.
+            max_length: Maximum sequence token length for truncation.
+
+        Returns:
+            np.ndarray of shape (len(sequences), embedding_dim) in float32.
+        """
+        if not sequences:
+            return np.empty((0, self.embedding_dim), dtype=np.float32)
+
+        if self.use_mock or self._model is None:
+            return self._mock_embed(sequences)
+
+        all_embeddings: list[np.ndarray] = []
+
+        for i in range(0, len(sequences), batch_size):
+            batch = list(sequences[i : i + batch_size])
+            inputs = self._tokenizer(
+                batch,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=max_length,
+            )
+            # Move explicitly to CPU
+            input_ids = inputs["input_ids"].to(self.device)
+            attention_mask = inputs["attention_mask"].to(self.device)
+
+            with torch.no_grad():
+                outputs = self._model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                )
+                last_hidden = outputs.last_hidden_state  # shape: (B, seq_len, D)
+
+                # Mean pooling over valid residues using attention mask
+                mask_expanded = attention_mask.unsqueeze(-1).expand_as(last_hidden).float()
+                sum_embeddings = torch.sum(last_hidden * mask_expanded, dim=1)
+                sum_mask = torch.clamp(mask_expanded.sum(dim=1), min=1e-9)
+                mean_pooled = sum_embeddings / sum_mask
+
+                if self.normalize:
+                    mean_pooled = torch.nn.functional.normalize(mean_pooled, p=2, dim=1)
+
+                batch_embeddings = mean_pooled.cpu().numpy().astype(np.float32)
+                all_embeddings.append(batch_embeddings)
+
+        return np.vstack(all_embeddings)
+
+    def embed_single(self, sequence: str) -> np.ndarray:
+        """Computes embedding for a single protein sequence."""
+        return self.embed_sequences([sequence], batch_size=1)[0]
