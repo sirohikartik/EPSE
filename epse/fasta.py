@@ -70,8 +70,9 @@ def _parse_header(header_line: str) -> tuple[str, str, str, str]:
         parts = header.split("|")
         prefix = parts[0].lower()
 
-        # UniProt style: >sp|P12345|NAME_SPECIES Description OS=Organism OX=...
-        if prefix in ("sp", "tr"):
+        # Standard 3-part pipe style: >db|accession|entry_name description OS=...
+        # Also covers UniProt (>sp|..., >tr|...) and generic pipe formats with 3+ parts
+        if prefix in ("sp", "tr", "db") or (len(parts) >= 3 and prefix not in ("pdb", "gi", "ref")):
             accession = parts[1] if len(parts) > 1 else "unknown"
             rest = parts[2] if len(parts) > 2 else ""
             if " " in rest:
@@ -79,13 +80,19 @@ def _parse_header(header_line: str) -> tuple[str, str, str, str]:
             else:
                 entry_name, desc_part = rest, ""
 
-            # Extract OS= (organism)
+            # Check for organism via OS= or [Organism]
             if " OS=" in desc_part:
                 desc_pre, os_post = desc_part.split(" OS=", 1)
                 description = desc_pre.strip()
-                # End of organism is typically OX=, GN=, PE=, SV= or end of string
                 match_org = re.split(r"\s+(?:OX|GN|PE|SV)=", os_post, maxsplit=1)
                 organism = match_org[0].strip()
+            elif "[" in desc_part and "]" in desc_part:
+                org_match = re.search(r"\[(.*?)\]", desc_part)
+                if org_match:
+                    organism = org_match.group(1).strip()
+                    description = re.sub(r"\[.*?\]", "", desc_part).strip()
+                else:
+                    description = desc_part.strip()
             else:
                 description = desc_part.strip()
 
