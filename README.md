@@ -2,6 +2,11 @@
 
 EPSE is a protein database search engine designed for fast similarity search on resource-constrained systems using standard CPU hardware.
 
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-222222?logo=githubpages&logoColor=white)](https://sirohikartik.github.io/EPSE/)
+![Python 3.8+](https://img.shields.io/badge/Python-3.8%2B-3776AB?logo=python&logoColor=white)
+![CPU only](https://img.shields.io/badge/Execution-CPU%20only-0b7285)
+[![MIT License](https://img.shields.io/github/license/sirohikartik/EPSE)](LICENSE)
+
 Instead of keeping large protein embedding sets permanently in memory, EPSE partitions protein embeddings into clusters using the e-means clustering algorithm (Meta FAIR, November 2026). At search time, query embeddings are compared first against cluster centroids. Only the top-scoring clusters are selectively read from disk into RAM, pruning the memory footprint and candidate search space.
 
 ## Features
@@ -16,6 +21,12 @@ Instead of keeping large protein embedding sets permanently in memory, EPSE part
   Two-stage query pipeline performs centroid ranking followed by selective disk reads of relevant clusters, avoiding full-database RAM ingestion.
 - Multi-format output:
   Supports tabular and JSON outputs with query latency breakdown and search-space pruning metrics.
+
+## Documentation
+
+Read the [EPSE documentation](https://sirohikartik.github.io/EPSE/) for installation, CLI usage, FASTA parsing, E-Means clustering, and the selective-load search engine.
+
+Technical guides: [FASTA & Embedder](docs/parser.html) · [E-Means](docs/emeans.html) · [Search Engine](docs/search.html)
 
 ## How It Works
 
