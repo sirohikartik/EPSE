@@ -2,10 +2,124 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>EPSE Parser</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FASTA Parser & Embedder | EPSE Documentation</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Parser Overview</h1>
-    <p>This page describes the EPSE embedding and parsing pipeline.</p >
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="index.html" class="sidebar-title">EPSE</a>
+            <div class="sidebar-version">v0.2.0 | CPU E-Means</div>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-heading">Overview</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="index.html" class="nav-link">Home Documentation</a></li>
+                <li class="nav-item"><a href="#fasta-streaming" class="nav-link active">FASTA Streaming</a></li>
+                <li class="nav-item"><a href="#cpu-embedder" class="nav-link">CPU Embedder</a></li>
+                <li class="nav-item"><a href="#normalization" class="nav-link">Normalization</a></li>
+            </ul>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-heading">Core Modules</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="emeans.html" class="nav-link">E-Means Clustering</a></li>
+                <li class="nav-item"><a href="parser.html" class="nav-link active">FASTA & Embedder</a></li>
+                <li class="nav-item"><a href="search.html" class="nav-link">Selective Search Engine</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header>
+            <h1>FASTA Ingestion & CPU Embedder Pipeline</h1>
+            <p class="lead">Detailed documentation for sequence streaming across diverse bioinformatics repositories and memory-efficient CPU representation generation.</p>
+        </header>
+
+        <section id="fasta-streaming">
+            <h2>Universal FASTA Streaming (<code>epse.fasta</code>)</h2>
+            <p>Bioinformatics databases employ varying header conventions and compression formats. The <code>epse.fasta.parse_fasta()</code> generator streams records incrementally without buffering the entire input file into memory.</p>
+
+            <h3>Supported Header Specifications</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Repository</th>
+                        <th>Format Pattern</th>
+                        <th>Extracted Metadata</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>UniProtKB</strong></td>
+                        <td><code>&gt;sp|P01308|INS_HUMAN Insulin OS=Homo sapiens OX=9606 ...</code></td>
+                        <td>Accession: <code>P01308</code>, Entry: <code>INS_HUMAN</code>, Organism: <code>Homo sapiens</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>NCBI RefSeq</strong></td>
+                        <td><code>&gt;gi|4501865|ref|NP_000676.1| alcohol dehydrogenase [Homo sapiens]</code></td>
+                        <td>Accession: <code>NP_000676.1</code>, Organism: <code>Homo sapiens</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Ensembl</strong></td>
+                        <td><code>&gt;ENSP00000369497 pep chromosome:... description:Dehydrogenase [Homo sapiens]</code></td>
+                        <td>Accession: <code>ENSP00000369497</code>, Organism: <code>Homo sapiens</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>PDB</strong></td>
+                        <td><code>&gt;pdb|4HHB|A Hemoglobin subunit alpha OS=Homo sapiens</code></td>
+                        <td>Accession: <code>4HHB_A</code>, Organism: <code>Homo sapiens</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Generic FASTA</strong></td>
+                        <td><code>&gt;my_sequence_id Optional description tokens</code></td>
+                        <td>Accession: <code>my_sequence_id</code>, Organism: <code>unknown</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Sequence Sanitization</h3>
+            <p>During iteration, sequences undergo standard bio-cleaning:</p>
+            <ul>
+                <li>Removal of internal and trailing whitespace characters (spaces, line breaks, carriage returns).</li>
+                <li>Upper-casing of IUPAC amino acid characters.</li>
+                <li>Stripping of termination symbols (such as trailing <code>*</code> characters).</li>
+            </ul>
+        </section>
+
+        <section id="cpu-embedder">
+            <h2>CPU Embedding Generation (<code>epse.embedder</code>)</h2>
+            <p>Dense sequence representations are produced using the ESM-2 transformer model (<code>facebook/esm2_t12_35M_UR50D</code>) running strictly on CPU hardware.</p>
+
+            <h3>Residue Attention Pooling</h3>
+            <p>Unlike raw classification representations, protein embeddings in EPSE use attention-masked mean pooling over valid sequence tokens:</p>
+            <pre><code># PyTorch CPU mean pooling with attention mask
+mask = attention_mask.unsqueeze(-1).expand_as(last_hidden_state).float()
+sum_embeddings = torch.sum(last_hidden_state * mask, dim=1)
+sum_mask = torch.clamp(mask.sum(dim=1), min=1e-9)
+mean_pooled = sum_embeddings / sum_mask</code></pre>
+
+            <h3>Batching on CPU</h3>
+            <p>CPU inference is batched (default batch size: 8) to optimize memory bandwidth and cache locality while maintaining low latency. Thread counts are configurable via <code>torch.set_num_threads</code>.</p>
+        </section>
+
+        <section id="normalization">
+            <h2>L2 Normalization & Spherical Geometry</h2>
+            <p>Every generated embedding is normalized onto the unit hypersphere: <code>v = v / ||v||_2</code>. Under unit normalization:</p>
+            <ul>
+                <li>Cosine similarity equals the inner dot product: <code>cos(u, v) = u . v</code>.</li>
+                <li>Squared Euclidean distance maps monotonically to cosine distance: <code>||u - v||^2 = 2 - 2(u . v)</code>.</li>
+                <li>Cluster centroids can be projected to unit length, enabling fast spherical e-means clustering and SIMD dot products.</li>
+            </ul>
+        </section>
+
+        <footer>
+            <div>EPSE Documentation</div>
+            <div><a href="index.html">Back to Home</a></div>
+        </footer>
+    </main>
 </body>
 </html>

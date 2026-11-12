@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-Means Clustering | EPSE Documentation</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="index.html" class="sidebar-title">EPSE</a>
+            <div class="sidebar-version">v0.2.0 | CPU E-Means</div>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-heading">Overview</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="index.html" class="nav-link">Home Documentation</a></li>
+                <li class="nav-item"><a href="#math-formulation" class="nav-link active">Mathematical Model</a></li>
+                <li class="nav-item"><a href="#scaling-laws" class="nav-link">Scaling Laws</a></li>
+                <li class="nav-item"><a href="#revival" class="nav-link">Dead Cluster Revival</a></li>
+                <li class="nav-item"><a href="#comparison" class="nav-link">Comparison to Lloyd's</a></li>
+            </ul>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-heading">Core Modules</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="emeans.html" class="nav-link active">E-Means Clustering</a></li>
+                <li class="nav-item"><a href="parser.html" class="nav-link">FASTA & Embedder</a></li>
+                <li class="nav-item"><a href="search.html" class="nav-link">Selective Search Engine</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header>
+            <h1>E-Means Clustering Architecture</h1>
+            <p class="lead">Algorithmic foundations and empirical scaling laws of the e-means clustering method (Meta FAIR, arXiv:2611.09501).</p>
+        </header>
+
+        <section id="math-formulation">
+            <h2>Algorithmic Formulation</h2>
+            <p>Traditional Lloyd's k-means clustering requires complete epoch passes before updating centroid locations. Streaming approaches (such as MacQueen's) accumulate statistics indefinitely, freezing early centroid errors.</p>
+            <p><strong>e-means</strong> solves this by using mini-batch updates combined with an Exponential Moving Average (EMA) applied to both vector sums and point counts:</p>
+
+            <pre><code># E-Means Mini-Batch EMA Update Equations
+S_j &lt;- (1 - alpha_t) * S_j + alpha_t * s_j
+N_j &lt;- (1 - alpha_t) * N_j + alpha_t * n_j
+c_j = S_j / N_j</code></pre>
+
+            <p>Where:</p>
+            <ul>
+                <li><code>S_j</code>: Accumulated weighted vector sum for cluster <code>j</code>.</li>
+                <li><code>N_j</code>: Accumulated weighted point count (mass) for cluster <code>j</code>.</li>
+                <li><code>s_j, n_j</code>: Vector sum and count of points assigned to cluster <code>j</code> within the current mini-batch.</li>
+                <li><code>alpha_t</code>: Annealed step rate governed by a cosine decay schedule.</li>
+            </ul>
+        </section>
+
+        <section id="scaling-laws">
+            <h2>Empirical Scaling Laws</h2>
+            <p>A major contribution of e-means is replacing hyperparameter grid searches with explicit scaling laws computed directly from dataset size (<code>n</code>), cluster count (<code>k</code>), and target epoch budget (<code>T</code>):</p>
+
+            <h3>1. Batch Size Scaling Law</h3>
+            <pre><code>B = 0.035 * (k ^ 0.13) * (n ^ 0.88) * (T ^ 0.81)</code></pre>
+
+            <h3>2. Initial Step Size Scaling Law</h3>
+            <pre><code>alpha_0 = min(0.824 * (k ^ -0.46) * (B ^ 0.90) * (n ^ -0.45) * (T ^ -0.11), 1.0)</code></pre>
+
+            <h3>3. Cosine Annealing Schedule</h3>
+            <p>Across training progression <code>p in [0, 1]</code> (where <code>p = step / total_steps</code>):</p>
+            <pre><code>alpha(p) = alpha_0 * (0.1 + 0.9 * 0.5 * (1 + cos(pi * p)))</code></pre>
+        </section>
+
+        <section id="revival">
+            <h2>Dead-Cluster Revival</h2>
+            <p>In streaming and mini-batch clustering, clusters can experience assignment starvation ("dead clusters"). e-means prevents cluster collapse through periodic revival checks:</p>
+            <ul>
+                <li>Every 5 update steps, cluster masses <code>N_j</code> are compared against <code>0.1 * mean(N)</code>.</li>
+                <li>Starved clusters are revived by selecting donor clusters sampled proportionally to mass.</li>
+                <li>The donor centroid is perturbed slightly and its mass shared, preventing empty partitions.</li>
+            </ul>
+        </section>
+
+        <section id="comparison">
+            <h2>Performance vs. Traditional K-Means</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Lloyd's K-Means</th>
+                        <th>Mini-Batch K-Means</th>
+                        <th>E-Means (EPSE)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Epochs to Convergence</td>
+                        <td>25 - 50 epochs</td>
+                        <td>10 - 20 epochs</td>
+                        <td><strong>1.5 - 5 epochs</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Hyperparameter Tuning</td>
+                        <td>None (fixed)</td>
+                        <td>Required (batch &amp; lr)</td>
+                        <td><strong>Zero (Scaling Laws)</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Dead Cluster Recovery</td>
+                        <td>Manual restart</td>
+                        <td>Re-seed random points</td>
+                        <td><strong>Donor Mass Splitting</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Final Loss Quality</td>
+                        <td>Baseline</td>
+                        <td>Often higher MSE</td>
+                        <td><strong>Lower or Equal MSE</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer>
+            <div>EPSE Documentation</div>
+            <div><a href="index.html">Back to Home</a></div>
+        </footer>
+    </main>
+</body>
+</html>

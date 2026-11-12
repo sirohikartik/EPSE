@@ -50,9 +50,14 @@ EPSE/
 │   ├── search.py        # Two-stage selective-load search engine
 │   └── cli.py           # Unified command-line interface (index, search, info)
 ├── parser/
-│   ├── __init__.py
-│   ├── parse.py         # Backward-compatible script wrapper
-│   └── legacy/          # Preserved C and C++ source implementations
+│   ├── __init__.py      # Package initialization
+│   └── parse.py         # Backward-compatible script wrapper
+├── docs/
+│   ├── index.html       # Documentation portal
+│   ├── parser.html      # FASTA & embedder technical guide
+│   ├── emeans.html      # E-Means mathematical foundations
+│   ├── search.html      # Two-stage search and selective I/O guide
+│   └── style.css        # Responsive documentation stylesheet
 ├── tests/
 │   ├── test_fasta.py    # Universal FASTA format unit tests
 │   ├── test_embedder.py # CPU embedder tests
@@ -149,15 +154,7 @@ Rank  Accession       EntryName       Score    Cluster    Organism             D
 epse info --data-dir .data/index
 ```
 
-### 4. Backward-Compatible Parser Script
-
-The original script invocation remains supported:
-
-```bash
-python parser/parse.py 0.90 dataset.fasta
-```
-
-### 5. Python API Usage
+### 4. Python API Usage
 
 ```python
 from epse import parse_fasta, ProteinEmbedder, EMeansClustering, IndexStorage, ProteinSearchEngine

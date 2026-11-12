@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selective Search Engine | EPSE Documentation</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="index.html" class="sidebar-title">EPSE</a>
+            <div class="sidebar-version">v0.2.0 | CPU E-Means</div>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-heading">Overview</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="index.html" class="nav-link">Home Documentation</a></li>
+                <li class="nav-item"><a href="#search-stages" class="nav-link active">Two-Stage Pipeline</a></li>
+                <li class="nav-item"><a href="#selective-io" class="nav-link">Selective Disk I/O</a></li>
+                <li class="nav-item"><a href="#tuning" class="nav-link">Tuning Recommendations</a></li>
+            </ul>
+        </div>
+
+        <div class="nav-group">
+            <div class="nav-heading">Core Modules</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="emeans.html" class="nav-link">E-Means Clustering</a></li>
+                <li class="nav-item"><a href="parser.html" class="nav-link">FASTA & Embedder</a></li>
+                <li class="nav-item"><a href="search.html" class="nav-link active">Selective Search Engine</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header>
+            <h1>Two-Stage Selective-Load Search Engine</h1>
+            <p class="lead">How EPSE executes low-latency similarity queries on massive datasets without exceeding constrained RAM budgets.</p>
+        </header>
+
+        <section id="search-stages">
+            <h2>The Two-Stage Search Architecture</h2>
+            <p>Direct linear search over 10 million protein embeddings (each 480 floats = 19.2 GB) requires massive RAM and computational overhead. EPSE prunes the search space through a two-stage retrieval strategy:</p>
+
+            <h3>Stage 1: Centroid Ranking</h3>
+            <ul>
+                <li>The query sequence is passed through the ESM-2 embedder on CPU, generating a unit-normalized vector <code>q in R^480</code>.</li>
+                <li>The query vector is evaluated against the cluster centroids <code>C in R^(k x 480)</code> via matrix multiplication: <code>scores = C . q</code>.</li>
+                <li>The top <code>M</code> cluster IDs with the highest inner products are selected (typically <code>M = 2 to 5</code>).</li>
+            </ul>
+
+            <h3>Stage 2: Selective Disk Loading & Candidate Ranking</h3>
+            <ul>
+                <li>Using the inverted cluster index (<code>cluster_index.json</code>), EPSE resolves the exact list of protein IDs belonging to the top <code>M</code> clusters.</li>
+                <li>Only those candidate embeddings are loaded from <code>embeddings.bin</code> via direct file seek operations.</li>
+                <li>Fine-grained cosine similarities are computed across the candidate subset, producing the final ranked top-K results.</li>
+            </ul>
+        </section>
+
+        <section id="selective-io">
+            <h2>Constant-Time O(1) Binary Storage (<code>epse.storage</code>)</h2>
+            <p>Every embedding in <code>embeddings.bin</code> is written with a fixed byte footprint:</p>
+            <pre><code>Record Layout:
+[ 4 bytes: uint32 protein_id ] + [ 480 * 4 bytes: float32 embedding coordinates ] = 1924 bytes</code></pre>
+            <p>To read the vector for protein <code>i</code> (1-indexed), the storage manager seeks directly to byte offset <code>(i - 1) * 1924</code>. Non-selected clusters remain on disk, ensuring memory usage depends strictly on the cluster size rather than total database scale.</p>
+        </section>
+
+        <section id="tuning">
+            <h2>Recommended Tuning Guidelines</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Database Size (N)</th>
+                        <th>Recommended Clusters (k)</th>
+                        <th>Clusters to Load (M)</th>
+                        <th>Expected Pruning</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1,000 - 10,000</td>
+                        <td>30 - 100</td>
+                        <td>2 - 3</td>
+                        <td>85% - 95%</td>
+                    </tr>
+                    <tr>
+                        <td>10,000 - 100,000</td>
+                        <td>100 - 320</td>
+                        <td>3 - 5</td>
+                        <td>94% - 98%</td>
+                    </tr>
+                    <tr>
+                        <td>100,000 - 1,000,000</td>
+                        <td>320 - 1,000</td>
+                        <td>5 - 10</td>
+                        <td>97% - 99.5%</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <footer>
+            <div>EPSE Documentation</div>
+            <div><a href="index.html">Back to Home</a></div>
+        </footer>
+    </main>
+</body>
+</html>

@@ -3,194 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EPSE Documentation</title>
+    <title>EPSE Documentation | Efficient Protein Search Engine</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="index.html" class="sidebar-title">EPSE</a>
+            <div class="sidebar-version">v0.2.0 | CPU E-Means</div>
+        </div>
 
-    <style>
-        body {
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-        }
+        <div class="nav-group">
+            <div class="nav-heading">Overview</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="#introduction" class="nav-link active">Introduction</a></li>
+                <li class="nav-item"><a href="#architecture" class="nav-link">System Architecture</a></li>
+                <li class="nav-item"><a href="#installation" class="nav-link">Installation</a></li>
+            </ul>
+        </div>
 
-        h1 {
-            margin-bottom: 0;
-        }
+        <div class="nav-group">
+            <div class="nav-heading">User Manual</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="#cli-guide" class="nav-link">CLI Commands</a></li>
+                <li class="nav-item"><a href="#search-workflow" class="nav-link">Search Workflow</a></li>
+                <li class="nav-item"><a href="#database-support" class="nav-link">Database Formats</a></li>
+            </ul>
+        </div>
 
-        h2 {
-            margin-top: 40px;
-        }
+        <div class="nav-group">
+            <div class="nav-heading">Core Modules</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="emeans.html" class="nav-link">E-Means Clustering</a></li>
+                <li class="nav-item"><a href="parser.html" class="nav-link">FASTA & Embedder</a></li>
+                <li class="nav-item"><a href="search.html" class="nav-link">Selective Search Engine</a></li>
+            </ul>
+        </div>
 
-        h3 {
-            margin-top: 25px;
-        }
+        <div class="nav-group">
+            <div class="nav-heading">API Reference</div>
+            <ul class="nav-list">
+                <li class="nav-item"><a href="#python-api" class="nav-link">Python API</a></li>
+                <li class="nav-item"><a href="#file-formats" class="nav-link">Storage Formats</a></li>
+            </ul>
+        </div>
+    </nav>
 
-        .subtitle {
-            color: #666;
-            margin-top: 5px;
-        }
+    <main class="main-content">
+        <header>
+            <h1>EPSE Documentation</h1>
+            <p class="lead">Efficient Protein Search Engine for resource-constrained systems, powered by modern E-Means clustering and ESM-2 embeddings on CPU.</p>
+        </header>
 
-        code {
-            background: #f4f4f4;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: Consolas, monospace;
-        }
+        <section id="introduction">
+            <h2>Introduction</h2>
+            <p>EPSE addresses the memory scaling bottleneck inherent in large-scale protein similarity search. Traditional vector indexing requires loading millions of high-dimensional embeddings into RAM. EPSE solves this by clustering protein embeddings using <strong>e-means</strong> and storing them in an on-disk binary format.</p>
+            <div class="callout">
+                <p><strong>Core Concept:</strong> At query time, EPSE evaluates centroids first, then selectively loads only the top-scoring clusters from disk into RAM. This prunes 80% to 99% of candidate search space and RAM consumption while maintaining high retrieval sensitivity.</p>
+            </div>
+        </section>
 
-        pre {
-            background: #f4f4f4;
-            padding: 15px;
-            overflow-x: auto;
-            border-radius: 4px;
-        }
+        <section id="architecture">
+            <h2>System Architecture</h2>
+            <p>The EPSE pipeline is organized into five components:</p>
+            <ol>
+                <li><strong>Universal FASTA Streamer (<code>epse.fasta</code>):</strong> Ingests sequences and metadata from any protein repository (UniProt, NCBI RefSeq, Ensembl, PDB, custom FASTA, or gzipped streams).</li>
+                <li><strong>CPU Embedding Engine (<code>epse.embedder</code>):</strong> Uses ESM-2 (t12, 35M parameters, 480 dimensions) on standard CPU hardware with batched inference and residue mean pooling.</li>
+                <li><strong>E-Means Clustering (<code>epse.emeans</code>):</strong> Meta FAIR's modern replacement for Lloyd's k-means. Combines mini-batch updates with Exponential Moving Averages (EMA), automatic scaling laws, and cosine decay.</li>
+                <li><strong>Disk-Backed Index (<code>epse.storage</code>):</strong> Fixed-record binary embedding files (<code>embeddings.bin</code>) supporting O(1) random disk access and inverted cluster indexes.</li>
+                <li><strong>Two-Stage Search Engine (<code>epse.search</code>):</strong> Cosine centroid ranking followed by selective disk read of candidates and fine-grained ranking.</li>
+            </ol>
+        </section>
 
-        a {
-            color: #0066cc;
-        }
+        <section id="installation">
+            <h2>Installation</h2>
+            <p>EPSE requires Python 3.8+ and standard CPU hardware. No GPUs, CUDA drivers, or specialized accelerators are required.</p>
+            <pre><code># Clone the repository
+git clone https://github.com/sirohikartik/EPSE.git
+cd EPSE
 
-        ul, ol {
-            padding-left: 25px;
-        }
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
-        hr {
-            border: none;
-            border-top: 1px solid #ddd;
-            margin: 35px 0;
-        }
+# Install requirements and package in editable mode
+pip install -r requirements.txt
+pip install -e .</code></pre>
+        </section>
 
-        .toc ul {
-            margin-top: 10px;
-        }
+        <section id="cli-guide">
+            <h2>Command-Line Interface (CLI)</h2>
+            <p>The <code>epse</code> command provides sub-commands for the complete workflow:</p>
 
-        .section {
-            margin-top: 40px;
-        }
-    </style>
-</head><body>
+            <h3>1. <code>epse index</code></h3>
+            <p>Indexes a FASTA file using CPU ESM-2 embeddings and E-Means clustering.</p>
+            <pre><code>epse index &lt;fasta_path&gt; [options]
 
-    <h1>EPSE Documentation</h1>
-    <p>Welcome to the official documentation hub. EPSE is a high-performance C-based engine designed to parse standard UniProt FASTA files and extract structured protein data sequences along with their respective metadata elements.</p>
+Options:
+  --data-dir, -d   Output directory for index artifacts (default: .data)
+  --k, -k          Number of clusters (default: automatic sqrt scaling)
+  --epochs, -e     E-Means training epochs (default: 5)
+  --batch-size, -b Inference batch size for CPU embeddings (default: 8)
+  --threads        PyTorch CPU thread count (default: auto)
+  --seed           Random seed for clustering initialization (default: 1234)</code></pre>
 
-    <hr>
+            <h3>2. <code>epse search</code></h3>
+            <p>Queries a protein sequence string or FASTA file against an index.</p>
+            <pre><code># Query sequence string
+epse search "MKTVRQERLKSIVRILERSKEPV" --data-dir .data --top-k 5 --top-clusters 3
 
-    <h2>Table of Contents</h2>
-    <ul>
-        <li><a href="#installation">Installation</a></li>
-        <li><a href="#getting-started">Getting Started</a></li>
-        <li><a href="#parser-overview">Parser Architecture Overview</a></li>
-        <li><a href="#api-reference">API Reference</a></li>
+# Query FASTA file with JSON output
+epse search query.fasta --data-dir .data --format json</code></pre>
 
-        <li><a href="#contributing">Contributing Guide</a></li>
-    </ul>
+            <h3>3. <code>epse info</code></h3>
+            <p>Displays cluster distribution statistics, protein count, and storage sizes.</p>
+            <pre><code>epse info --data-dir .data</code></pre>
+        </section>
 
-    <hr>
+        <section id="search-workflow">
+            <h2>Search Workflow & Metrics</h2>
+            <p>When executing a query, EPSE provides real-time performance metrics:</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Description</th>
+                        <th>Typical Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>Embedding Time</code></td>
+                        <td>Generating 480-dimensional ESM-2 embedding on CPU</td>
+                        <td>50 - 150 ms</td>
+                    </tr>
+                    <tr>
+                        <td><code>Centroid Ranking</code></td>
+                        <td>Dot-product scoring against cluster centroids</td>
+                        <td>&lt; 1 ms</td>
+                    </tr>
+                    <tr>
+                        <td><code>Disk Selective Read</code></td>
+                        <td>Direct O(1) random disk seeks for chosen clusters</td>
+                        <td>0.2 - 2 ms</td>
+                    </tr>
+                    <tr>
+                        <td><code>Candidate Ranking</code></td>
+                        <td>Cosine similarity scoring within loaded candidates</td>
+                        <td>&lt; 0.5 ms</td>
+                    </tr>
+                    <tr>
+                        <td><code>Search Space Pruning</code></td>
+                        <td>Percentage of dataset not loaded into RAM</td>
+                        <td>85% - 99%</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
 
-    <div id="installation">
-        <h2>Installation</h2>
-    
-    </div>
+        <section id="database-support">
+            <h2>Universal Database Support</h2>
+            <p>EPSE automatically parses protein records from the following formats:</p>
+            <ul>
+                <li><strong>UniProtKB (Swiss-Prot / TrEMBL):</strong> <code>&gt;sp|P12345|NAME_SPECIES Description OS=Organism OX=...</code></li>
+                <li><strong>NCBI RefSeq & GenBank:</strong> <code>&gt;gi|12345|ref|NP_001234.1| Description [Organism]</code></li>
+                <li><strong>Ensembl:</strong> <code>&gt;ENSP00000369497 pep chromosome:... description:Description [Organism]</code></li>
+                <li><strong>PDB:</strong> <code>&gt;pdb|4HHB|A Hemoglobin subunit alpha OS=Homo sapiens</code></li>
+                <li><strong>Generic FASTA:</strong> <code>&gt;custom_identifier Optional description tokens</code></li>
+            </ul>
+        </section>
 
-    <hr>
+        <section id="python-api">
+            <h2>Python API Reference</h2>
+            <pre><code>from epse import parse_fasta, ProteinEmbedder, EMeansClustering, IndexStorage, ProteinSearchEngine
 
-    <div id="getting-started">
-        <h2>Getting Started</h2>
-        <p>This utility processes standard UniProt FASTA records to transform raw text sequences into organized data blocks.</p>
+# 1. Parse database
+entries = list(parse_fasta("uniprot_sprot.fasta"))
 
-        <h3>Basic Execution</h3>
-        <p>To execute the compiled parser binary, pass the source <code>.fasta</code> filepath followed by your designated target output directory:</p>
-        <p><strong>Execution Syntax:</strong></p>
-        <pre>./parser &lt;path_to_fasta&gt; &lt;output_folder&gt;</pre>
+# 2. Embed on CPU
+embedder = ProteinEmbedder(normalize=True)
+embeddings = embedder.embed_sequences([e.seq for e in entries])
 
-        <p><strong>Example Command:</strong></p>
-        <pre>./parser uniprot_sprot.fasta /output_data</pre>
+# 3. Cluster with E-Means
+emeans = EMeansClustering(k=100, nepochs=5, spherical=True)
+emeans.fit(embeddings)
 
-        <h3>Expected Standard Output</h3>
-        <p>The console will stream real-time processing confirmations as records are processed:</p>
-        <pre>
-ID: 1
-Accession: Q91G67
-Sequence length: 480
-        </pre>
-    </div>
+# 4. Save index to disk
+storage = IndexStorage(".data/my_index", embedding_dim=embeddings.shape[1])
+storage.save_index(
+    metadata_list=[e.to_dict() for e in entries],
+    embeddings=embeddings,
+    cluster_assignments=emeans.labels_,
+    centroids=emeans.centroids_,
+)
 
-    <hr>
+# 5. Search
+search_engine = ProteinSearchEngine(".data/my_index", embedder=embedder)
+hits, metrics = search_engine.search("MALWMRLLPLLALLALWGPDPAAA", top_k=5, top_clusters=2)
+for h in hits:
+    print(f"Rank {h.rank}: {h.accession} ({h.organism}) - Score: {h.score:.4f}")</code></pre>
+        </section>
 
-    <div id="parser-overview">
-        <h2>Parser Architecture Overview</h2>
-        <p>The core pipeline logic resides within <code>parser/parse.c</code>. It relies on a deterministic single-pass architecture to scan data records efficiently.</p>
+        <section id="file-formats">
+            <h2>On-Disk File Formats</h2>
+            <ul>
+                <li><code>proteins.csv</code>: Metadata table storing <code>id, accession, entry_name, description, organism, seq_len</code>.</li>
+                <li><code>embeddings.bin</code>: Binary record file. Each entry has 4 bytes (uint32 id) followed by <code>480 * 4</code> bytes (float32 coordinates).</li>
+                <li><code>assignments.bin</code>: 8-byte pairs storing <code>uint32 protein_id</code> and <code>uint32 cluster_id</code>.</li>
+                <li><code>centroids.csv</code>: Centroid vectors and cluster sizes in CSV format.</li>
+                <li><code>cluster_index.json</code>: Inverted index mapping each cluster ID to its associated protein IDs.</li>
+            </ul>
+        </section>
 
-        <h3>How Ingestion Works</h3>
-        <ul>
-            <li><strong>Line Ingestion:</strong> Reads the input stream into a persistent 4096-byte memory buffer via <code>fgets</code> to safe-guard stack space.</li>
-            <li><strong>Header Detection:</strong> Isolates rows beginning with a <code>&gt;</code> character to split headers, immediately capturing the structural segments (Accession, Entry Name, Description, and Organism fields).</li>
-            <li><strong>Sequence Accumulation:</strong> Captures downstream multi-line string sequences and merges them into a resizing continuous block that doubles its heap capacity whenever a bound limit is reached.</li>
-        </ul>
-
-        <h3>Fixed Size Constraints</h3>
-        <p>To optimize execution speeds, raw fields map to the following explicit buffer boundaries:</p>
-        <ul>
-            <li><strong>Accession Strings:</strong> Maximum 32 characters.</li>
-            <li><strong>Entry Name Strings:</strong> Maximum 32 characters.</li>
-            <li><strong>Organism Identifiers:</strong> Maximum 32 characters.</li>
-            <li><strong>Description Field:</strong> Maximum 256 characters.</li>
-        </ul>
-    </div>
-
-    <hr>
-
-    <div id="api-reference">
-        <h2>API Reference</h2>
-        <p>Technical specifications for public function entrypoints and struct definitions managed inside the parser library.</p>
-
-        <h3>Primary Functions</h3>
-        <h4><code>parse_and_save()</code></h4>
-        <p>Invokes the full storage file parsing loop pipeline.</p>
-        <pre>void parse_and_save(char* filepath, char* folder_name);</pre>
-        <ul>
-            <li><code>filepath</code>: Points to the local source FASTA dataset.</li>
-            <li><code>folder_name</code>: Target filesystem directory for output file generation.</li>
-        </ul>
-
-        <h3>Data Layout Frameworks</h3>
-        <h4><code>Entry</code></h4>
-        <p>The core structure mapping standard header elements and sequence locations.</p>
-        <pre>
-typedef struct {
-    uint32_t id;
-    char accession[32];
-    char entry_name[32];
-    char description[256];
-    char organism[32];
-    sequence* seq;
-} Entry;
-        </pre>
-
-        <h4><code>ProteinEmbedding</code></h4>
-        <p>Allocated space tracking fixed vector dimensions for downstream processing tasks.</p>
-        <pre>
-typedef struct {
-    uint32_t protein_id;
-    float embedding[480]; 
-} ProteinEmbedding;
-        </pre>
-    </div>
-
-    <hr>
-
-
-
-    <hr>
-
-    <div id="contributing">
-        <h2>Contributing Guide</h2>
-        <p>Contributions are highly appreciated! If you are modifying the codebase or updating the parsing structures, please follow these guidelines:</p>
-        <ol>
-            <li>Fork the repository and develop on a descriptive branch(e.g., <code>feat/refactor-headers</code>).</li>
-            <li>Ensure any structural adjustments follow the fixed bounds defined in the <code>Entry</code> data model layouts.</li>
-            <li>Keep modifications focused; individual Pull Requests should solve one explicit issue or feature addition at a time.</li>
-        </ol>
-    </div>
-
+        <footer>
+            <div>EPSE Project Lead: Kartik Sirohi</div>
+            <div>Documentation version 0.2.0</div>
+        </footer>
+    </main>
 </body>
 </html>
