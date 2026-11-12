@@ -1,1 +1,1 @@
-"""EPSE legacy and compatibility parser interface."""
+"""EPSE backward compatibility parser interface."""
