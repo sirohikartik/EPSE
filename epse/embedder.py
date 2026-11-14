@@ -7,6 +7,7 @@ enforcing torch CPU device, thread controls, batching, and L2 normalization.
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 from typing import Sequence, Union, Optional
 import numpy as np
 import torch
@@ -27,6 +28,7 @@ class ProteinEmbedder:
         normalize: bool = True,
         use_mock: bool = False,
         embedding_dim: int = DEFAULT_EMBEDDING_DIM,
+        cache_size: int = 1024,
     ):
         """Initializes the CPU protein embedder.
 
@@ -36,12 +38,15 @@ class ProteinEmbedder:
             normalize: Whether to L2-normalize embeddings (ideal for cosine similarity).
             use_mock: If True, uses deterministic hash/n-gram embeddings for testing without downloading weights.
             embedding_dim: Embedding dimension (480 for esm2_t12_35M).
+            cache_size: Maximum number of embeddings to keep in LRU cache (0 to disable).
         """
         self.model_name = model_name
         self.device = torch.device("cpu")
         self.normalize = normalize
         self.use_mock = use_mock
         self.embedding_dim = embedding_dim
+        self.cache_size = max(0, int(cache_size))
+        self._cache: OrderedDict[str, np.ndarray] = OrderedDict()
         self._model = None
         self._tokenizer = None
 
@@ -83,28 +88,40 @@ class ProteinEmbedder:
 
         return embeddings
 
-    def embed_sequences(
+    def _cache_get(self, seq: str) -> Optional[np.ndarray]:
+        """Retrieves cached embedding if present, updating LRU order."""
+        if self.cache_size <= 0 or seq not in self._cache:
+            return None
+        self._cache.move_to_end(seq)
+        return self._cache[seq]
+
+    def _cache_put(self, seq: str, vec: np.ndarray) -> None:
+        """Stores embedding in LRU cache, evicting oldest if full."""
+        if self.cache_size <= 0:
+            return
+        if seq in self._cache:
+            self._cache.move_to_end(seq)
+        else:
+            if len(self._cache) >= self.cache_size:
+                self._cache.popitem(last=False)
+            self._cache[seq] = vec
+
+    def clear_cache(self) -> None:
+        """Clears the embedding LRU cache."""
+        self._cache.clear()
+
+    @property
+    def cache_size_current(self) -> int:
+        """Returns the number of currently cached embeddings."""
+        return len(self._cache)
+
+    def _compute_embeddings(
         self,
         sequences: Sequence[str],
         batch_size: int = 8,
         max_length: int = 1024,
     ) -> np.ndarray:
-        """Computes embeddings for a list of protein sequences on CPU.
-
-        Args:
-            sequences: List or sequence of amino acid strings.
-            batch_size: Number of sequences to process concurrently in a CPU batch.
-            max_length: Maximum sequence token length for truncation.
-
-        Returns:
-            np.ndarray of shape (len(sequences), embedding_dim) in float32.
-        """
-        if not sequences:
-            return np.empty((0, self.embedding_dim), dtype=np.float32)
-
-        if self.use_mock or self._model is None:
-            return self._mock_embed(sequences)
-
+        """Internal helper to compute embeddings via PyTorch on CPU."""
         all_embeddings: list[np.ndarray] = []
 
         for i in range(0, len(sequences), batch_size):
@@ -116,7 +133,6 @@ class ProteinEmbedder:
                 truncation=True,
                 max_length=max_length,
             )
-            # Move explicitly to CPU
             input_ids = inputs["input_ids"].to(self.device)
             attention_mask = inputs["attention_mask"].to(self.device)
 
@@ -127,7 +143,6 @@ class ProteinEmbedder:
                 )
                 last_hidden = outputs.last_hidden_state  # shape: (B, seq_len, D)
 
-                # Mean pooling over valid residues using attention mask
                 mask_expanded = attention_mask.unsqueeze(-1).expand_as(last_hidden).float()
                 sum_embeddings = torch.sum(last_hidden * mask_expanded, dim=1)
                 sum_mask = torch.clamp(mask_expanded.sum(dim=1), min=1e-9)
@@ -141,6 +156,68 @@ class ProteinEmbedder:
 
         return np.vstack(all_embeddings)
 
+    def embed_sequences(
+        self,
+        sequences: Sequence[str],
+        batch_size: int = 8,
+        max_length: int = 1024,
+    ) -> np.ndarray:
+        """Computes embeddings for a list of protein sequences on CPU.
+
+        Utilizes the internal LRU cache to avoid redundant computation for previously
+        embedded queries.
+
+        Args:
+            sequences: List or sequence of amino acid strings.
+            batch_size: Number of sequences to process concurrently in a CPU batch.
+            max_length: Maximum sequence token length for truncation.
+
+        Returns:
+            np.ndarray of shape (len(sequences), embedding_dim) in float32.
+        """
+        if not sequences:
+            return np.empty((0, self.embedding_dim), dtype=np.float32)
+
+        if self.cache_size > 0:
+            cached_hits: dict[int, np.ndarray] = {}
+            miss_indices: list[int] = []
+            miss_seqs: list[str] = []
+
+            for idx, seq in enumerate(sequences):
+                cached = self._cache_get(seq)
+                if cached is not None:
+                    cached_hits[idx] = cached
+                else:
+                    miss_indices.append(idx)
+                    miss_seqs.append(seq)
+
+            if not miss_seqs:
+                return np.vstack([cached_hits[i] for i in range(len(sequences))])
+
+            if self.use_mock or self._model is None:
+                computed = self._mock_embed(miss_seqs)
+            else:
+                computed = self._compute_embeddings(miss_seqs, batch_size=batch_size, max_length=max_length)
+
+            for seq, vec in zip(miss_seqs, computed):
+                self._cache_put(seq, vec)
+
+            all_res = np.empty((len(sequences), self.embedding_dim), dtype=np.float32)
+            for idx, hit in cached_hits.items():
+                all_res[idx] = hit
+            for local_i, orig_i in enumerate(miss_indices):
+                all_res[orig_i] = computed[local_i]
+            return all_res
+
+        if self.use_mock or self._model is None:
+            return self._mock_embed(sequences)
+
+        return self._compute_embeddings(sequences, batch_size=batch_size, max_length=max_length)
+
     def embed_single(self, sequence: str) -> np.ndarray:
-        """Computes embedding for a single protein sequence."""
-        return self.embed_sequences([sequence], batch_size=1)[0]
+        """Computes embedding for a single protein sequence, with LRU cache lookup."""
+        cached = self._cache_get(sequence)
+        if cached is not None:
+            return cached.copy()
+        vec = self.embed_sequences([sequence], batch_size=1)[0]
+        return vec.copy()
