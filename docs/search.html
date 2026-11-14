@@ -53,7 +53,7 @@
             <h3>Stage 2: Selective Disk Loading & Candidate Ranking</h3>
             <ul>
                 <li>Using the inverted cluster index (<code>cluster_index.json</code>), EPSE resolves the exact list of protein IDs belonging to the top <code>M</code> clusters.</li>
-                <li>Only those candidate embeddings are loaded from <code>embeddings.bin</code> via direct file seek operations.</li>
+                <li>Only those candidate embeddings are retrieved from <code>embeddings.bin</code> via zero-copy memory mapping (<code>np.memmap</code>), ensuring fast random access without reading non-matching clusters into RAM.</li>
                 <li>Fine-grained cosine similarities are computed across the candidate subset, producing the final ranked top-K results.</li>
             </ul>
         </section>
@@ -63,7 +63,7 @@
             <p>Every embedding in <code>embeddings.bin</code> is written with a fixed byte footprint:</p>
             <pre><code>Record Layout:
 [ 4 bytes: uint32 protein_id ] + [ 480 * 4 bytes: float32 embedding coordinates ] = 1924 bytes</code></pre>
-            <p>To read the vector for protein <code>i</code> (1-indexed), the storage manager seeks directly to byte offset <code>(i - 1) * 1924</code>. Non-selected clusters remain on disk, ensuring memory usage depends strictly on the cluster size rather than total database scale.</p>
+            <p>To read the vector for protein <code>i</code> (1-indexed), the storage manager indexes directly via virtual memory mapping or seeks to byte offset <code>(i - 1) * 1924</code>. Non-selected clusters remain unpaged on disk, ensuring memory usage depends strictly on the cluster size rather than total database scale.</p>
         </section>
 
         <section id="tuning">
