@@ -54,37 +54,44 @@ body {
 
 .sidebar-header {
     margin-bottom: 24px;
-    padding-bottom: 12px;
+    padding-bottom: 14px;
     border-bottom: 1px solid var(--border-color);
 }
 
 .sidebar-title {
-    font-size: 1.25rem;
-    font-weight: 700;
+    font-size: 1.35rem;
+    font-weight: 800;
     color: var(--accent-color);
     text-decoration: none;
     letter-spacing: -0.02em;
+    display: inline-block;
+    text-shadow: 0 0 25px rgba(34, 211, 238, 0.35);
 }
 
 .sidebar-version {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--text-muted);
     font-family: var(--font-mono);
-    margin-top: 4px;
+    margin-top: 6px;
+    display: inline-block;
+    padding: 2px 6px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
 }
 
 .nav-group {
-    margin-bottom: 20px;
+    margin-bottom: 22px;
 }
 
 .nav-heading {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     font-weight: 700;
     color: var(--text-muted);
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
     margin-bottom: 8px;
-    padding-left: 8px;
+    padding-left: 10px;
 }
 
 .nav-list {
@@ -97,23 +104,25 @@ body {
 
 .nav-link {
     display: block;
-    padding: 6px 8px;
+    padding: 7px 10px;
     color: var(--text-secondary);
     text-decoration: none;
     border-radius: 4px;
-    font-size: 0.9rem;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    font-size: 0.88rem;
+    transition: background-color 0.15s ease, color 0.15s ease, border-left-color 0.15s ease;
+    border-left: 2px solid transparent;
 }
 
 .nav-link:hover {
-    background-color: #e3fafc;
-    color: var(--accent-color);
+    background-color: rgba(34, 211, 238, 0.08);
+    color: var(--accent-hover);
 }
 
 .nav-link.active {
-    background-color: #c5f6fa;
-    color: var(--accent-hover);
+    background: linear-gradient(90deg, rgba(34, 211, 238, 0.15) 0%, rgba(34, 211, 238, 0.03) 100%);
+    color: var(--accent-color);
     font-weight: 600;
+    border-left: 2px solid var(--accent-color);
 }
 
 /* Main Content Layout */
