@@ -83,16 +83,20 @@ class ProteinSearchEngine:
         self,
         data_dir: str,
         embedder: Optional[ProteinEmbedder] = None,
+        normalized: bool = True,
     ):
         """Initializes the search engine from an indexed directory.
 
         Args:
             data_dir: Directory containing proteins.csv, embeddings.bin, centroids.csv, etc.
             embedder: Optional ProteinEmbedder instance. If None, initialized on CPU.
+            normalized: Whether index embeddings are already unit-normalized. When True,
+                        skips redundant L2-norm recomputation per query for faster ranking.
         """
         self.data_dir = data_dir
         self.storage = IndexStorage(data_dir)
         self.embedder = embedder
+        self.normalized = normalized
 
         # Load centroids and inverted cluster index
         self.centroids, self.cluster_counts = self.storage.load_centroids()
@@ -182,12 +186,13 @@ class ProteinSearchEngine:
 
         # Step 4: Fine-grained cosine ranking within candidates
         t0 = time.perf_counter()
-        # candidate_embs are unit-normalized if generated with normalize=True
-        # Compute cosine similarity
-        cand_norms = np.linalg.norm(candidate_embs, axis=1, keepdims=True)
-        cand_norms[cand_norms == 0] = 1.0
-        norm_embs = candidate_embs / cand_norms
-        similarities = np.dot(norm_embs, query_vec)
+        if self.normalized:
+            similarities = np.dot(candidate_embs, query_vec)
+        else:
+            cand_norms = np.linalg.norm(candidate_embs, axis=1, keepdims=True)
+            cand_norms[cand_norms == 0] = 1.0
+            norm_embs = candidate_embs / cand_norms
+            similarities = np.dot(norm_embs, query_vec)
 
         # Rank candidates
         rank_order = _top_indices(similarities, top_k)
