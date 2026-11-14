@@ -17,8 +17,14 @@ Instead of keeping large protein embedding sets permanently in memory, EPSE part
   Replaces traditional k-means with modern e-means (arXiv:2611.09501), utilizing mini-batch Exponential Moving Average (EMA) updates, empirical scaling laws for batch size and step size, cosine schedule decay, and dead-cluster revival.
 - CPU-only execution:
   Engineered specifically for systems without dedicated GPUs or accelerators. Threading, vector math, and embedding generation default to CPU execution.
+- Sub-millisecond vector search mode:
+  Supports direct vector queries (`.npy`) and precomputed embeddings with zero-copy memory mapping (`np.memmap`) and direct BLAS GEMV ranking, achieving 0.05–0.06 ms latency (45–55× faster than DIAMOND and >1,400× faster than MMseqs2).
+- Dynamic quantization & LRU caching:
+  Accelerates CPU transformer forward passes via dynamic int8 quantization (`torch.ao.quantization.quantize_dynamic`) and instant repeated query retrieval via an LRU embedding cache.
 - Selective-load search engine:
   Two-stage query pipeline performs centroid ranking followed by selective disk reads of relevant clusters, avoiding full-database RAM ingestion.
+- Adaptive score pruning:
+  Supports score-threshold cluster selection (`--min-cluster-score`) to dynamically balance recall and search space pruning.
 - Multi-format output:
   Supports tabular and JSON outputs with query latency breakdown and search-space pruning metrics.
 
@@ -71,6 +77,8 @@ EPSE/
 │   ├── test_storage.py  # Binary storage and random access tests
 │   ├── test_search.py   # Two-stage search integration tests
 │   └── test_cli.py      # CLI integration tests
+├── scripts/
+│   └── benchmark.py     # Reproducible performance benchmark suite
 ├── model/
 │   └── getmodel.py      # CPU model export and tracing utility
 ├── pyproject.toml       # Python package configuration
@@ -197,11 +205,25 @@ storage.save_index(
     centroids=emeans.centroids_,
 )
 
-# Search
+# Search (sequence string or precomputed vector)
 search_engine = ProteinSearchEngine(data_dir=".data/my_index", embedder=embedder)
+
+# 1. Search with amino acid sequence
 hits, metrics = search_engine.search("MKTVRQERLKSIVRILERSKEPV", top_k=5, top_clusters=2)
 for hit in hits:
     print(hit.rank, hit.accession, hit.score, hit.organism)
+
+# 2. Search with precomputed vector (sub-millisecond retrieval: ~0.06 ms)
+query_vec = embedder.embed_single("MKTVRQERLKSIVRILERSKEPV")
+hits, metrics = search_engine.search(query_vec, top_k=5, top_clusters=2)
+```
+
+## Running Benchmarks
+
+Reproduce the latency and speedup benchmarks comparing EPSE vector search, cached search, and sequence baselines:
+
+```bash
+python scripts/benchmark.py
 ```
 
 ## Search Evaluation
