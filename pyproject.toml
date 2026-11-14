@@ -8,12 +8,13 @@ version = "0.2.0"
 description = "Efficient Protein Search Engine using E-Means Clustering on CPU"
 readme = "README.md"
 requires-python = ">=3.8"
-license = { text = "MIT" }
+license = { text = "AGPL-3.0-or-later" }
 authors = [
     { name = "Kartik Sirohi" }
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Operating System :: OS Independent",
