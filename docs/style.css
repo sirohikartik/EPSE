@@ -1,16 +1,20 @@
-/* EPSE Documentation Stylesheet */
+/* EPSE Documentation Stylesheet - Absolute Dark Theme */
 
 :root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f8f9fa;
-    --bg-code: #f1f3f5;
-    --border-color: #e9ecef;
-    --text-primary: #212529;
-    --text-secondary: #495057;
-    --text-muted: #6c757d;
-    --accent-color: #0b7285;
-    --accent-hover: #085a6a;
-    --sidebar-bg: #f8f9fa;
+    --bg-primary: #000000;
+    --bg-secondary: #080a0f;
+    --bg-surface: #0e1117;
+    --bg-code: #0d1117;
+    --bg-pre: #050608;
+    --border-color: #1e2430;
+    --border-subtle: #141822;
+    --text-primary: #f0f3f6;
+    --text-secondary: #a8b3cf;
+    --text-muted: #6e7681;
+    --accent-color: #22d3ee;
+    --accent-hover: #38bdf8;
+    --accent-glow: rgba(34, 211, 238, 0.15);
+    --sidebar-bg: #040508;
     --sidebar-width: 260px;
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-mono: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -30,6 +34,8 @@ body {
     font-size: 16px;
     display: flex;
     min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 /* Sidebar Navigation */
