@@ -72,3 +72,16 @@ def test_search_pipeline_integration(tmp_path):
     assert metrics.candidates_loaded == 4  # Only 4 proteins loaded out of 10
     assert metrics.clusters_loaded == 1
     assert metrics.search_space_pruned_pct == 60.0  # (1 - 4/10) * 100%
+
+    # Test min_cluster_score pruning: only cluster 0 should qualify
+    hits_thresh, metrics_thresh = engine.search(
+        query=query_vec, top_k=2, top_clusters=3, min_cluster_score=0.7
+    )
+    assert metrics_thresh.clusters_loaded == 1
+    assert metrics_thresh.candidates_loaded == 4
+    assert len(hits_thresh) == 2
+
+    # Test search_many with precomputed vector queries
+    batch_res = engine.search_many([query_vec], top_k=2, top_clusters=1)
+    assert len(batch_res) == 1
+    assert len(batch_res[0][0]) == 2

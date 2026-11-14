@@ -128,6 +128,7 @@ class ProteinSearchEngine:
         query: Union[str, np.ndarray],
         top_k: int = 10,
         top_clusters: int = 3,
+        min_cluster_score: Optional[float] = None,
     ) -> Tuple[List[SearchResult], SearchMetrics]:
         """Performs selective-load similarity search for a query sequence or embedding.
 
@@ -135,6 +136,9 @@ class ProteinSearchEngine:
             query: Amino acid sequence string or precomputed 1D numpy embedding.
             top_k: Maximum number of ranked protein hits to return.
             top_clusters: Number of nearest clusters to selectively load from disk.
+            min_cluster_score: Optional minimum centroid similarity score to load a cluster.
+                               If provided, prunes low-similarity clusters or expands clusters
+                               meeting the threshold up to top_clusters.
 
         Returns:
             Tuple of (list of SearchResult, SearchMetrics).
@@ -157,9 +161,19 @@ class ProteinSearchEngine:
         # Step 2: Compare against cluster centroids using cosine similarity
         t0 = time.perf_counter()
         centroid_scores = np.dot(self.centroids, query_vec)
-        # Select top-M clusters
-        num_clusters_to_load = min(max(1, top_clusters), self.k)
-        ranked_clusters = _top_indices(centroid_scores, num_clusters_to_load).tolist()
+        # Select clusters to load
+        if min_cluster_score is not None:
+            above_threshold = np.where(centroid_scores >= min_cluster_score)[0]
+            if len(above_threshold) > 0:
+                ranked_clusters = above_threshold[np.argsort(-centroid_scores[above_threshold])].tolist()
+                if top_clusters is not None and top_clusters > 0:
+                    ranked_clusters = ranked_clusters[:top_clusters]
+            else:
+                top_1 = int(np.argmax(centroid_scores))
+                ranked_clusters = [top_1]
+        else:
+            num_clusters_to_load = min(max(1, top_clusters), self.k)
+            ranked_clusters = _top_indices(centroid_scores, num_clusters_to_load).tolist()
         t_centroid = time.perf_counter() - t0
 
         # Step 3: Selectively load ONLY candidate embeddings from disk
@@ -246,6 +260,7 @@ class ProteinSearchEngine:
         top_k: int = 10,
         top_clusters: int = 3,
         batch_size: int = 8,
+        min_cluster_score: Optional[float] = None,
     ) -> List[Tuple[List[SearchResult], SearchMetrics]]:
         """Search a query batch, embedding all sequence queries together.
 
@@ -276,6 +291,7 @@ class ProteinSearchEngine:
                 embedded[i] if i in embedded else query,
                 top_k=top_k,
                 top_clusters=top_clusters,
+                min_cluster_score=min_cluster_score,
             )
             if i in embedded:
                 metrics.embed_time_sec = embed_share

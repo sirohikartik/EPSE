@@ -194,6 +194,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             top_k=args.top_k,
             top_clusters=args.top_clusters,
             batch_size=args.batch_size,
+            min_cluster_score=args.min_cluster_score,
         )
         if args.format == "json":
             output = {
@@ -228,6 +229,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         query=query_seq,
         top_k=args.top_k,
         top_clusters=args.top_clusters,
+        min_cluster_score=args.min_cluster_score,
     )
 
     if args.format == "json":
@@ -334,6 +336,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("--data-dir", "-d", default=".data", help="Directory of indexed database")
     p_search.add_argument("--top-k", "-k", type=int, default=5, help="Number of hits to return (default: 5)")
     p_search.add_argument("--top-clusters", "-c", type=int, default=3, help="Number of clusters to load (default: 3)")
+    p_search.add_argument("--min-cluster-score", type=float, default=None, help="Minimum centroid score threshold to load a cluster")
     p_search.add_argument("--format", choices=["table", "json"], default="table", help="Output display format")
     p_search.add_argument("--model-name", default=DEFAULT_MODEL_NAME, help="ESM-2 model name")
     p_search.add_argument("--threads", type=int, default=None, help="CPU threads for PyTorch")
