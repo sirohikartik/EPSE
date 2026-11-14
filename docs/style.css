@@ -325,6 +325,31 @@ footer {
     justify-content: space-between;
 }
 
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1c2331;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #2b364c;
+}
+
+/* Text Selection */
+::selection {
+    background-color: rgba(34, 211, 238, 0.28);
+    color: #ffffff;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     body {
