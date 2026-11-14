@@ -135,45 +135,46 @@ body {
 
 /* Typography */
 h1 {
-    font-size: 2.25rem;
+    font-size: 2.35rem;
     font-weight: 800;
     letter-spacing: -0.03em;
-    color: #101113;
-    margin-bottom: 12px;
+    color: #ffffff;
+    margin-bottom: 14px;
     line-height: 1.2;
 }
 
 .lead {
     font-size: 1.15rem;
     color: var(--text-secondary);
-    margin-bottom: 28px;
-    line-height: 1.6;
+    margin-bottom: 30px;
+    line-height: 1.65;
 }
 
 h2 {
-    font-size: 1.5rem;
+    font-size: 1.55rem;
     font-weight: 700;
-    color: #1c1e21;
-    margin-top: 40px;
+    color: #f0f3f6;
+    margin-top: 44px;
     margin-bottom: 16px;
-    padding-bottom: 8px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color);
     letter-spacing: -0.02em;
 }
 
 h3 {
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     font-weight: 600;
-    color: #2b2c34;
-    margin-top: 28px;
+    color: #e6edf3;
+    margin-top: 30px;
     margin-bottom: 12px;
+    letter-spacing: -0.01em;
 }
 
 h4 {
     font-size: 1.05rem;
     font-weight: 600;
-    color: #373a40;
-    margin-top: 20px;
+    color: #cbd5e1;
+    margin-top: 22px;
     margin-bottom: 8px;
 }
 
@@ -185,24 +186,28 @@ p {
 a {
     color: var(--accent-color);
     text-decoration: none;
+    transition: color 0.15s ease, text-decoration-color 0.15s ease;
 }
 
 a:hover {
+    color: var(--accent-hover);
     text-decoration: underline;
+    text-decoration-color: var(--accent-hover);
 }
 
 ul, ol {
-    margin-bottom: 16px;
+    margin-bottom: 18px;
     padding-left: 24px;
     color: var(--text-secondary);
 }
 
 li {
-    margin-bottom: 6px;
+    margin-bottom: 7px;
 }
 
 strong {
-    color: var(--text-primary);
+    color: #ffffff;
+    font-weight: 600;
 }
 
 /* Code Blocks */
