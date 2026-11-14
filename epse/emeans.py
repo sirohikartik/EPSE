@@ -107,9 +107,15 @@ class EMeansClustering:
         auto = int(round(math.sqrt(n)))
         return max(2, min(n, auto))
 
-    def fit(self, X: np.ndarray) -> "EMeansClustering":
-        """Fits E-Means clustering on embeddings array X of shape (n, d)."""
-        X = np.ascontiguousarray(X, dtype=np.float32)
+    def fit(self, X: np.ndarray, assume_normalized: bool = False) -> "EMeansClustering":
+        """Fit on embeddings, optionally preserving an already-normalized memmap.
+
+        ``assume_normalized`` avoids a full-array normalization copy when the
+        caller's vectors are known to be L2-normalized, as ProteinEmbedder does.
+        """
+        X = np.asanyarray(X, dtype=np.float32)
+        if not X.flags.c_contiguous:
+            X = np.ascontiguousarray(X, dtype=np.float32)
         n, d = X.shape
 
         if n == 0:
@@ -118,7 +124,7 @@ class EMeansClustering:
         k = self._auto_k(n)
         self.k = k
 
-        if self.spherical:
+        if self.spherical and not assume_normalized:
             norms = np.linalg.norm(X, axis=1, keepdims=True)
             norms[norms == 0] = 1.0
             X = X / norms
@@ -160,7 +166,7 @@ class EMeansClustering:
                 centroids, labels = model.train(X)
                 self.centroids_ = centroids.astype(np.float32)
                 # Compute exact final labels
-                self.labels_ = self.predict(X)
+                self.labels_ = self._assign(X, self.centroids_)
                 self.cluster_sizes_ = np.bincount(self.labels_, minlength=k).astype(np.int32)
                 return self
             except Exception as e:
@@ -276,12 +282,21 @@ class EMeansClustering:
 
         # 3. Finalization step: Exact mean calculation over final assignments
         final_labels = self._assign(X, centroids)
-        final_centroids = centroids.copy()
+        sums = np.zeros((k, d), dtype=np.float64)
+        counts = np.zeros(k, dtype=np.int64)
+        chunk_size = 8192
+        for start in range(0, n, chunk_size):
+            end = min(n, start + chunk_size)
+            chunk_labels = final_labels[start:end]
+            chunk_X = X[start:end]
+            for cid in np.unique(chunk_labels):
+                mask = chunk_labels == cid
+                sums[cid] += np.sum(chunk_X[mask], axis=0)
+                counts[cid] += int(np.sum(mask))
 
-        for cid in range(k):
-            mask = final_labels == cid
-            if np.any(mask):
-                final_centroids[cid] = np.mean(X[mask], axis=0)
+        final_centroids = centroids.copy()
+        nonempty = counts > 0
+        final_centroids[nonempty] = sums[nonempty] / counts[nonempty, np.newaxis]
 
         if self.spherical:
             fc_norms = np.linalg.norm(final_centroids, axis=1, keepdims=True)
@@ -294,14 +309,20 @@ class EMeansClustering:
 
     def _assign(self, X: np.ndarray, centroids: np.ndarray) -> np.ndarray:
         """Assigns rows of X to the nearest centroid."""
-        if self.spherical:
-            sims = np.dot(X, centroids.T)
-            return np.argmax(sims, axis=1).astype(np.int32)
-        else:
-            x_sq = np.sum(X**2, axis=1, keepdims=True)
-            c_sq = np.sum(centroids**2, axis=1, keepdims=True).T
-            dists = x_sq - 2.0 * np.dot(X, centroids.T) + c_sq
-            return np.argmin(dists, axis=1).astype(np.int32)
+        labels = np.empty(len(X), dtype=np.int32)
+        chunk_size = 8192
+        c_sq = np.sum(centroids**2, axis=1, keepdims=True).T
+        for start in range(0, len(X), chunk_size):
+            end = min(len(X), start + chunk_size)
+            chunk = X[start:end]
+            if self.spherical:
+                scores = np.dot(chunk, centroids.T)
+                labels[start:end] = np.argmax(scores, axis=1)
+            else:
+                x_sq = np.sum(chunk**2, axis=1, keepdims=True)
+                dists = x_sq - 2.0 * np.dot(chunk, centroids.T) + c_sq
+                labels[start:end] = np.argmin(dists, axis=1)
+        return labels
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Predicts closest cluster indices for given embeddings."""

@@ -70,11 +70,21 @@ class IndexStorage:
                     meta.get("seq_len", 0),
                 ])
 
-        # 2. Write embeddings.bin (uint32 protein_id + float32 array)
+        # 2. Write embeddings.bin (uint32 protein_id + float32 array) in
+        # chunks, avoiding a Python write call for every protein record.
+        record_dtype = np.dtype(
+            [("protein_id", np.uint32), ("embedding", np.float32, (dim,))]
+        )
+        if record_dtype.itemsize != self.record_size:
+            raise ValueError("Unexpected embedding record layout")
         with open(self.embeddings_bin, "wb") as f:
-            for idx in range(1, n + 1):
-                f.write(struct.pack("I", idx))
-                f.write(embeddings[idx - 1].astype(np.float32).tobytes())
+            chunk_size = 8192
+            for start in range(0, n, chunk_size):
+                end = min(n, start + chunk_size)
+                records = np.empty(end - start, dtype=record_dtype)
+                records["protein_id"] = np.arange(start + 1, end + 1, dtype=np.uint32)
+                records["embedding"] = embeddings[start:end]
+                f.write(records.tobytes())
 
         # 3. Write assignments.bin (uint32 protein_id + uint32 cluster_id)
         cluster_to_pids: Dict[int, List[int]] = {}
