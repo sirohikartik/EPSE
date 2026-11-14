@@ -130,6 +130,9 @@ epse search query.fasta --data-dir .data/index --top-k 10 --top-clusters 3
 
 # JSON output format
 epse search query.fasta --data-dir .data/index --format json
+
+# Batch-search every record in a multi-sequence FASTA query
+epse search queries.fasta --data-dir .data/index --top-k 10 --batch-size 8 --format json
 ```
 
 Example search output:
@@ -194,30 +197,29 @@ for hit in hits:
 
 ## Search Evaluation
 
-EPSE was compared with DIAMOND 2.2.8, MMseqs2 18, and NCBI BLAST+ 2.17.0 on an 8 GB Apple Silicon Mac on 14 November 2026. The benchmark used the first 500 reviewed UniProt records returned for each of three organisms (*E. coli*, yeast, and human): the first 20 records were held out as queries, and the remaining 480 formed the search database. Search tools used one CPU thread; EPSE used ESM-2 `esm2_t12_35M_UR50D`, two PyTorch threads, E-Means with 20 clusters and one epoch, and returned the top 10 hits after loading three clusters.
+EPSE was compared with DIAMOND 2.2.8, MMseqs2 18, and NCBI BLAST+ 2.17.0 on an 8 GB Apple Silicon Mac on 14 November 2026. For each of *E. coli*, yeast, and human, the first 50 reviewed UniProt records were held out as queries and the next 1,000 were used as the database. Competitors used one CPU thread. EPSE used ESM-2 `esm2_t12_35M_UR50D`, two PyTorch threads, E-Means with 32 clusters and one epoch, query batches of 8, and returned the top 10 hits.
 
 ### Search cost
 
-| Tool | Search time per query | Peak search RAM |
-|---|---:|---:|
-| EPSE | 54–224 ms median | 495–551 MB |
-| DIAMOND `blastp` | 4–6 ms average | 12–13 MB |
-| MMseqs2 `easy-search` | 243–353 ms average | 711–728 MB |
-| NCBI BLASTP | 166–182 ms average | 46–48 MB |
+| Dataset | EPSE median / p95 per query (M=3) | DIAMOND average | MMseqs2 average | BLASTP average | EPSE search peak RAM | DIAMOND / MMseqs2 / BLASTP peak RAM |
+|---|---:|---:|---:|---:|---:|---:|
+| *E. coli* | 298 / 299 ms | 2.8 ms | 106 ms | 78 ms | 1,053 MB | 13 / 747 / 47 MB |
+| Yeast | 192 / 193 ms | 2.8 ms | 88 ms | 68 ms | 884 MB | 13 / 736 / 49 MB |
+| Human | 343 / 344 ms | 3.0 ms | 66 ms | 80 ms | 911 MB | 13 / 742 / 50 MB |
 
-Competitor averages divide the wall time for a batch of 20 queries by 20; that time includes process startup and database loading. EPSE latency is the median per-query API time after model and index initialization, and includes query embedding. EPSE's 95th-percentile query latency ranged from 419 to 824 ms. Indexing took 205–224 seconds and peaked at 654–664 MB on the yeast and human subsets; those index timings were not retained for *E. coli*.
+Competitor averages divide the wall time for one 50-query search process by 50 and include process startup and database loading. EPSE figures are per-query API metrics after model and index initialization, with batch embedding time shared across the 50 queries. EPSE batch wall times for M=3 were 14.9 s, 9.6 s, and 17.2 s, respectively. Indexing took 217–383 seconds across the three datasets and an E. coli repeat; peak index RSS was 847–980 MB. DIAMOND and MMseqs2 database builds took 0.02–0.05 seconds, while BLASTP database builds took 2.27–3.81 seconds.
 
 ### Result agreement
 
-Quality was measured as overlap with the top 10 BLASTP hits having E-value ≤ 1e-3. Top-1 is the fraction of those queries where the first result matched BLASTP's first significant hit. Only queries with at least one significant BLASTP hit are included.
+Quality was measured as overlap with the top 10 significant BLASTP hits (E-value ≤ 1e-3). Top-1 is the fraction of those queries where the first result matched BLASTP's first significant hit. Only queries with at least one significant BLASTP hit are included. EPSE values show M=1, 3, 6, and 12 in order.
 
-| Dataset | Significant queries | EPSE recall@10 / top-1 | DIAMOND recall@10 / top-1 | MMseqs2 recall@10 / top-1 |
-|---|---:|---:|---:|---:|
-| *E. coli* | 6 / 20 | 0.67 / 0.67 | 0.42 / 0.50 | 0.83 / 0.83 |
-| Yeast | 5 / 20 | 0.94 / 0.80 | 0.82 / 1.00 | 0.94 / 1.00 |
-| Human | 6 / 20 | 0.45 / 0.17 | 0.34 / 0.83 | 0.47 / 0.83 |
+| Dataset | Significant queries | EPSE recall@10 (M=1/3/6/12) | EPSE top-1 (M=1/3/6/12) | DIAMOND recall@10 / top-1 | MMseqs2 recall@10 / top-1 |
+|---|---:|---:|---:|---:|---:|
+| *E. coli* | 26 / 50 | 0.40 / 0.68 / 0.72 / 0.72 | 0.46 / 0.65 / 0.65 / 0.65 | 0.38 / 0.42 | 0.66 / 0.73 |
+| Yeast | 15 / 50 | 0.55 / 0.71 / 0.71 / 0.71 | 0.40 / 0.60 / 0.60 / 0.60 | 0.70 / 0.80 | 0.83 / 0.87 |
+| Human | 17 / 50 | 0.17 / 0.30 / 0.30 / 0.31 | 0.12 / 0.18 / 0.18 / 0.18 | 0.24 / 0.41 | 0.43 / 0.65 |
 
-These are small, exploratory subsets, and BLASTP is the reference rather than independent biological ground truth. EPSE ranks embedding similarity while the other tools perform sequence alignment, so their scores are not directly equivalent. This run shows that EPSE fits within 8 GB at this database size, but does not establish how its selective loading performs on large databases. Search time and memory can change substantially with database size, query composition, and tool settings.
+At this scale EPSE was slower than all three sequence-search tools. Increasing M from 1 to 6 improved *E. coli* recall, while yeast and human recall changed little beyond M=3. These are exploratory subsets, and BLASTP is the reference rather than independent biological ground truth. EPSE ranks embedding similarity while the other tools align sequences. The ESM-2 embedder truncates sequences above 1,024 residues, while the alignment tools searched full sequences. The results show that EPSE fits within 8 GB at this database size; larger databases are still needed to measure the benefit of selective loading. Search time, quality, and memory can change with database size, query composition, and tool settings.
 
 ## Running Tests
 
