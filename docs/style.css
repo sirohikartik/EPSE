@@ -278,12 +278,22 @@ tr:hover {
 
 /* Callout Box */
 .callout {
-    background-color: #e6fcf5;
-    border-left: 4px solid #0ca678;
-    padding: 14px 18px;
-    border-radius: 0 4px 4px 0;
-    margin-bottom: 20px;
+    background-color: #061715;
+    border: 1px solid #0c332c;
+    border-left: 4px solid #10b981;
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 24px;
     font-size: 0.95rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.callout p {
+    color: #a7f3d0;
+}
+
+.callout strong {
+    color: #ecfdf5;
 }
 
 .callout p:last-child {
@@ -291,14 +301,23 @@ tr:hover {
 }
 
 .callout-info {
-    background-color: #e7f5ff;
-    border-left-color: #1c7ed6;
+    background-color: #07152b;
+    border: 1px solid #0f2c59;
+    border-left-color: #38bdf8;
+}
+
+.callout-info p {
+    color: #bae6fd;
+}
+
+.callout-info strong {
+    color: #f0f9ff;
 }
 
 /* Footer */
 footer {
     margin-top: 60px;
-    padding-top: 20px;
+    padding-top: 24px;
     border-top: 1px solid var(--border-color);
     font-size: 0.85rem;
     color: var(--text-muted);
