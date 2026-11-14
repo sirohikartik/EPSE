@@ -13,13 +13,25 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 import numpy as np
 
 from .embedder import ProteinEmbedder
 from .storage import IndexStorage, ProteinMetadata
 
 logger = logging.getLogger(__name__)
+
+
+def _top_indices(scores: np.ndarray, count: int) -> np.ndarray:
+    """Return score-descending indices without fully sorting large arrays."""
+    count = min(max(0, int(count)), len(scores))
+    if count == 0:
+        return np.empty(0, dtype=np.intp)
+    if count == len(scores):
+        return np.argsort(-scores)
+
+    selected = np.argpartition(scores, len(scores) - count)[-count:]
+    return selected[np.argsort(-scores[selected])]
 
 
 @dataclass
@@ -143,7 +155,7 @@ class ProteinSearchEngine:
         centroid_scores = np.dot(self.centroids, query_vec)
         # Select top-M clusters
         num_clusters_to_load = min(max(1, top_clusters), self.k)
-        ranked_clusters = np.argsort(-centroid_scores)[:num_clusters_to_load].tolist()
+        ranked_clusters = _top_indices(centroid_scores, num_clusters_to_load).tolist()
         t_centroid = time.perf_counter() - t0
 
         # Step 3: Selectively load ONLY candidate embeddings from disk
@@ -178,7 +190,7 @@ class ProteinSearchEngine:
         similarities = np.dot(norm_embs, query_vec)
 
         # Rank candidates
-        rank_order = np.argsort(-similarities)[:top_k]
+        rank_order = _top_indices(similarities, top_k)
         top_pids = [pids[idx] for idx in rank_order]
         top_scores = [float(similarities[idx]) for idx in rank_order]
         t_rank = time.perf_counter() - t0
@@ -222,3 +234,46 @@ class ProteinSearchEngine:
         )
 
         return results, metrics
+
+    def search_many(
+        self,
+        queries: Sequence[Union[str, np.ndarray]],
+        top_k: int = 10,
+        top_clusters: int = 3,
+        batch_size: int = 8,
+    ) -> List[Tuple[List[SearchResult], SearchMetrics]]:
+        """Search a query batch, embedding all sequence queries together.
+
+        The returned metrics include an equal share of batch embedding time for
+        each sequence query. This reports amortized per-query latency; measure
+        the wall time around this method for end-to-end batch latency.
+        """
+        if len(queries) == 0:
+            return []
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+
+        sequence_positions = [i for i, query in enumerate(queries) if isinstance(query, str)]
+        embedded: Dict[int, np.ndarray] = {}
+        embed_share = 0.0
+        if sequence_positions:
+            if self.embedder is None:
+                self.embedder = ProteinEmbedder(normalize=True)
+            t0 = time.perf_counter()
+            sequences = [queries[i] for i in sequence_positions]
+            vectors = self.embedder.embed_sequences(sequences, batch_size=batch_size)
+            embed_share = (time.perf_counter() - t0) / len(sequence_positions)
+            embedded = {position: vectors[j] for j, position in enumerate(sequence_positions)}
+
+        results = []
+        for i, query in enumerate(queries):
+            hits, metrics = self.search(
+                embedded[i] if i in embedded else query,
+                top_k=top_k,
+                top_clusters=top_clusters,
+            )
+            if i in embedded:
+                metrics.embed_time_sec = embed_share
+                metrics.total_time_sec += embed_share
+            results.append((hits, metrics))
+        return results

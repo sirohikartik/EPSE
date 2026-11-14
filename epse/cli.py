@@ -10,8 +10,8 @@ import argparse
 import json
 import os
 import sys
+import tempfile
 import time
-from typing import List
 import numpy as np
 
 from .fasta import parse_fasta, UniversalFastaEntry
@@ -39,11 +39,11 @@ def cmd_index(args: argparse.Namespace) -> int:
         print(f"ERROR: FASTA file not found: {fasta_path}", file=sys.stderr)
         return 1
 
-    # 1. Parse FASTA entries
+    # Count once so the embedding matrix can be allocated as a disk-backed
+    # memmap without retaining all sequence strings in memory.
     t0 = time.perf_counter()
-    print("Reading and parsing protein database...")
-    entries: List[UniversalFastaEntry] = list(parse_fasta(fasta_path))
-    n_entries = len(entries)
+    print("Counting protein records...")
+    n_entries = sum(1 for _ in parse_fasta(fasta_path))
     t_parse = time.perf_counter() - t0
     print(f"Parsed {n_entries} protein records across database in {t_parse:.2f}s.")
 
@@ -51,7 +51,7 @@ def cmd_index(args: argparse.Namespace) -> int:
         print("ERROR: No valid protein sequences found in FASTA file.", file=sys.stderr)
         return 1
 
-    # 2. Generate embeddings
+    # 2. Embed records in batches directly into a temporary memmap.
     t0 = time.perf_counter()
     print(f"Generating embeddings on CPU for {n_entries} sequences...")
     embedder = ProteinEmbedder(
@@ -60,47 +60,102 @@ def cmd_index(args: argparse.Namespace) -> int:
         normalize=True,
         use_mock=args.use_mock,
     )
-    sequences = [e.seq for e in entries]
-    embeddings = embedder.embed_sequences(sequences, batch_size=args.batch_size)
-    t_embed = time.perf_counter() - t0
-    print(f"Generated {embeddings.shape[0]} embeddings (dim={embeddings.shape[1]}) in {t_embed:.2f}s.")
+    if args.batch_size <= 0:
+        print("ERROR: batch size must be positive.", file=sys.stderr)
+        return 1
 
-    # 3. Cluster using modern e-means
-    t0 = time.perf_counter()
-    print("Clustering embeddings with E-Means (EMA mini-batch updates + scaling laws)...")
-    emeans = EMeansClustering(
-        k=args.k,
-        nepochs=args.epochs,
-        spherical=True,
-        seed=args.seed,
-    )
-    emeans.fit(embeddings)
-    t_cluster = time.perf_counter() - t0
-    print(f"E-Means clustered {n_entries} proteins into {emeans.k} centroids in {t_cluster:.2f}s.")
+    os.makedirs(data_dir, exist_ok=True)
+    fd, embedding_tmp = tempfile.mkstemp(prefix=".epse-embeddings-", dir=data_dir)
+    os.close(fd)
+    embeddings = None
+    try:
+        embeddings = np.memmap(
+            embedding_tmp,
+            mode="w+",
+            dtype=np.float32,
+            shape=(n_entries, embedder.embedding_dim),
+        )
+        metadata_list = []
+        pending_sequences = []
+        write_start = 0
 
-    # 4. Save to disk
-    t0 = time.perf_counter()
-    print(f"Saving database artifacts to {data_dir}...")
-    storage = IndexStorage(data_dir=data_dir, embedding_dim=embeddings.shape[1])
-    metadata_list = [e.to_dict() for e in entries]
-    storage.save_index(
-        metadata_list=metadata_list,
-        embeddings=embeddings,
-        cluster_assignments=emeans.labels_,
-        centroids=emeans.centroids_,
-        cluster_counts=emeans.cluster_sizes_,
-    )
-    t_save = time.perf_counter() - t0
+        def flush_batch() -> None:
+            nonlocal write_start
+            if not pending_sequences:
+                return
+            batch_embeddings = embedder.embed_sequences(
+                pending_sequences, batch_size=args.batch_size
+            )
+            embeddings[write_start : write_start + len(pending_sequences)] = batch_embeddings
+            write_start += len(pending_sequences)
+            pending_sequences.clear()
 
-    print(f"Index successfully written in {t_save:.2f}s.")
-    print("Files created:")
-    print(f"  - Metadata   : {storage.proteins_csv}")
-    print(f"  - Embeddings : {storage.embeddings_bin}")
-    print(f"  - Assignments: {storage.assignments_bin}")
-    print(f"  - Centroids  : {storage.centroids_csv}")
-    print(f"  - Inverted idx: {storage.cluster_index_path}")
-    print(f"\nDone! Total pipeline time: {(t_parse + t_embed + t_cluster + t_save):.2f}s.\n")
-    return 0
+        for entry in parse_fasta(fasta_path):
+            metadata_list.append(
+                {
+                    "accession": entry.accession,
+                    "entry_name": entry.entry_name,
+                    "description": entry.description,
+                    "organism": entry.organism,
+                    "seq_len": len(entry.seq),
+                }
+            )
+            pending_sequences.append(entry.seq)
+            if len(pending_sequences) >= args.batch_size:
+                flush_batch()
+        flush_batch()
+
+        if write_start != n_entries:
+            raise RuntimeError(
+                f"FASTA record count changed during indexing ({n_entries} then {write_start})."
+            )
+        embeddings.flush()
+        t_embed = time.perf_counter() - t0
+        print(f"Generated {n_entries} embeddings (dim={embeddings.shape[1]}) in {t_embed:.2f}s.")
+
+        # 3. Cluster normalized embeddings without making a full in-memory copy.
+        t0 = time.perf_counter()
+        print("Clustering embeddings with E-Means (EMA mini-batch updates + scaling laws)...")
+        emeans = EMeansClustering(
+            k=args.k,
+            nepochs=args.epochs,
+            spherical=True,
+            seed=args.seed,
+        )
+        emeans.fit(embeddings, assume_normalized=True)
+        t_cluster = time.perf_counter() - t0
+        print(f"E-Means clustered {n_entries} proteins into {emeans.k} centroids in {t_cluster:.2f}s.")
+
+        # 4. Save final index files in bounded chunks.
+        t0 = time.perf_counter()
+        print(f"Saving database artifacts to {data_dir}...")
+        storage = IndexStorage(data_dir=data_dir, embedding_dim=embeddings.shape[1])
+        storage.save_index(
+            metadata_list=metadata_list,
+            embeddings=embeddings,
+            cluster_assignments=emeans.labels_,
+            centroids=emeans.centroids_,
+            cluster_counts=emeans.cluster_sizes_,
+        )
+        t_save = time.perf_counter() - t0
+
+        print(f"Index successfully written in {t_save:.2f}s.")
+        print("Files created:")
+        print(f"  - Metadata   : {storage.proteins_csv}")
+        print(f"  - Embeddings : {storage.embeddings_bin}")
+        print(f"  - Assignments: {storage.assignments_bin}")
+        print(f"  - Centroids  : {storage.centroids_csv}")
+        print(f"  - Inverted idx: {storage.cluster_index_path}")
+        print(f"\nDone! Total pipeline time: {(t_parse + t_embed + t_cluster + t_save):.2f}s.\n")
+        return 0
+    finally:
+        if embeddings is not None:
+            embeddings.flush()
+            del embeddings
+        try:
+            os.remove(embedding_tmp)
+        except FileNotFoundError:
+            pass
 
 
 def cmd_search(args: argparse.Namespace) -> int:
@@ -112,14 +167,15 @@ def cmd_search(args: argparse.Namespace) -> int:
         print(f"ERROR: Index directory not found: {data_dir}", file=sys.stderr)
         return 1
 
+    query_entries = None
     # Check if query is a file path or a raw sequence
     if os.path.exists(query_input):
-        entries = list(parse_fasta(query_input))
-        if not entries:
+        query_entries = list(parse_fasta(query_input))
+        if not query_entries:
             print(f"ERROR: Could not parse query FASTA file: {query_input}", file=sys.stderr)
             return 1
-        query_seq = entries[0].seq
-        query_label = entries[0].accession
+        query_seq = query_entries[0].seq
+        query_label = query_entries[0].accession
     else:
         query_seq = query_input.strip().upper()
         query_label = "CustomQuery"
@@ -132,6 +188,42 @@ def cmd_search(args: argparse.Namespace) -> int:
     )
 
     search_engine = ProteinSearchEngine(data_dir=data_dir, embedder=embedder)
+    if query_entries is not None and len(query_entries) > 1:
+        batch_results = search_engine.search_many(
+            [entry.seq for entry in query_entries],
+            top_k=args.top_k,
+            top_clusters=args.top_clusters,
+            batch_size=args.batch_size,
+        )
+        if args.format == "json":
+            output = {
+                "queries": [
+                    {
+                        "query": entry.accession,
+                        "metrics": {
+                            "total_proteins": metrics.total_proteins,
+                            "candidates_loaded": metrics.candidates_loaded,
+                            "clusters_loaded": metrics.clusters_loaded,
+                            "search_space_pruned_pct": round(metrics.search_space_pruned_pct, 2),
+                            "total_time_ms": round(metrics.total_time_sec * 1000, 2),
+                        },
+                        "hits": [hit.to_dict() for hit in hits],
+                    }
+                    for entry, (hits, metrics) in zip(query_entries, batch_results)
+                ]
+            }
+            print(json.dumps(output, indent=2))
+            return 0
+
+        for entry, (hits, metrics) in zip(query_entries, batch_results):
+            print(
+                f"{entry.accession}: {metrics.total_time_sec * 1000:.2f} ms, "
+                f"{metrics.candidates_loaded}/{metrics.total_proteins} candidates"
+            )
+            for hit in hits:
+                print(f"  {hit.rank:>3}  {hit.accession:<15} {hit.score:.4f}")
+        return 0
+
     results, metrics = search_engine.search(
         query=query_seq,
         top_k=args.top_k,
@@ -245,6 +337,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("--format", choices=["table", "json"], default="table", help="Output display format")
     p_search.add_argument("--model-name", default=DEFAULT_MODEL_NAME, help="ESM-2 model name")
     p_search.add_argument("--threads", type=int, default=None, help="CPU threads for PyTorch")
+    p_search.add_argument("--batch-size", type=int, default=8, help="Sequences per embedding batch for multi-record FASTA queries")
     p_search.add_argument("--use-mock", action="store_true", help="Use deterministic mock embeddings for testing")
     p_search.set_defaults(func=cmd_search)
 
