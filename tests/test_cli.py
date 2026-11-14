@@ -32,7 +32,7 @@ def test_cli_index_and_search_integration(tmp_path):
     assert os.path.exists(os.path.join(data_dir, "proteins.csv"))
     assert os.path.exists(os.path.join(data_dir, "centroids.csv"))
 
-    # Run search command
+    # Run search command with sequence
     args_search = parser.parse_args([
         "search",
         "MALWMRLLPLLALLALWGPDPAAA",
@@ -43,6 +43,20 @@ def test_cli_index_and_search_integration(tmp_path):
     ])
     code_search = args_search.func(args_search)
     assert code_search == 0
+
+    # Run search command with .npy vector query (pre-embedded mode)
+    import numpy as np
+    query_npy = tmp_path / "query.npy"
+    np.save(str(query_npy), np.random.randn(2, 480).astype(np.float32))
+    args_search_vec = parser.parse_args([
+        "search",
+        str(query_npy),
+        "--data-dir", data_dir,
+        "--top-k", "1",
+        "--format", "json",
+    ])
+    code_search_vec = args_search_vec.func(args_search_vec)
+    assert code_search_vec == 0
 
     # Run info command
     args_info = parser.parse_args([

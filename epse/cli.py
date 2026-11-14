@@ -168,26 +168,78 @@ def cmd_search(args: argparse.Namespace) -> int:
         return 1
 
     query_entries = None
+    query_vectors = None
     # Check if query is a file path or a raw sequence
     if os.path.exists(query_input):
-        query_entries = list(parse_fasta(query_input))
-        if not query_entries:
-            print(f"ERROR: Could not parse query FASTA file: {query_input}", file=sys.stderr)
-            return 1
-        query_seq = query_entries[0].seq
-        query_label = query_entries[0].accession
+        if query_input.endswith(".npy"):
+            loaded_arr = np.load(query_input)
+            if loaded_arr.ndim == 1:
+                query_seq = loaded_arr.astype(np.float32)
+                query_label = os.path.splitext(os.path.basename(query_input))[0]
+            elif loaded_arr.ndim == 2:
+                query_vectors = [loaded_arr[i].astype(np.float32) for i in range(len(loaded_arr))]
+                query_label = os.path.splitext(os.path.basename(query_input))[0]
+            else:
+                print(f"ERROR: .npy query must be 1D or 2D array, got shape {loaded_arr.shape}", file=sys.stderr)
+                return 1
+        else:
+            query_entries = list(parse_fasta(query_input))
+            if not query_entries:
+                print(f"ERROR: Could not parse query FASTA file: {query_input}", file=sys.stderr)
+                return 1
+            query_seq = query_entries[0].seq
+            query_label = query_entries[0].accession
     else:
         query_seq = query_input.strip().upper()
         query_label = "CustomQuery"
 
-    embedder = ProteinEmbedder(
-        model_name=args.model_name,
-        num_threads=args.threads,
-        normalize=True,
-        use_mock=args.use_mock,
-    )
+    embedder = None
+    if query_vectors is None and isinstance(query_seq, str) or query_entries is not None:
+        embedder = ProteinEmbedder(
+            model_name=args.model_name,
+            num_threads=args.threads,
+            normalize=True,
+            use_mock=args.use_mock,
+        )
 
     search_engine = ProteinSearchEngine(data_dir=data_dir, embedder=embedder)
+    if query_vectors is not None:
+        batch_results = search_engine.search_many(
+            query_vectors,
+            top_k=args.top_k,
+            top_clusters=args.top_clusters,
+            batch_size=args.batch_size,
+            min_cluster_score=args.min_cluster_score,
+        )
+        if args.format == "json":
+            output = {
+                "queries": [
+                    {
+                        "query": f"Vector_{idx + 1}",
+                        "metrics": {
+                            "total_proteins": metrics.total_proteins,
+                            "candidates_loaded": metrics.candidates_loaded,
+                            "clusters_loaded": metrics.clusters_loaded,
+                            "search_space_pruned_pct": round(metrics.search_space_pruned_pct, 2),
+                            "total_time_ms": round(metrics.total_time_sec * 1000, 2),
+                        },
+                        "hits": [hit.to_dict() for hit in hits],
+                    }
+                    for idx, (hits, metrics) in enumerate(batch_results)
+                ]
+            }
+            print(json.dumps(output, indent=2))
+            return 0
+
+        for idx, (hits, metrics) in enumerate(batch_results, start=1):
+            print(
+                f"Vector_{idx}: {metrics.total_time_sec * 1000:.2f} ms, "
+                f"{metrics.candidates_loaded}/{metrics.total_proteins} candidates"
+            )
+            for hit in hits:
+                print(f"  {hit.rank:>3}  {hit.accession:<15} {hit.score:.4f}")
+        return 0
+
     if query_entries is not None and len(query_entries) > 1:
         batch_results = search_engine.search_many(
             [entry.seq for entry in query_entries],
@@ -332,7 +384,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # search sub-command
     p_search = subparsers.add_parser("search", help="Search a protein sequence against an index")
-    p_search.add_argument("query", help="Query amino acid sequence or FASTA file")
+    p_search.add_argument("query", help="Query amino acid sequence, FASTA file, or .npy embedding vector file")
     p_search.add_argument("--data-dir", "-d", default=".data", help="Directory of indexed database")
     p_search.add_argument("--top-k", "-k", type=int, default=5, help="Number of hits to return (default: 5)")
     p_search.add_argument("--top-clusters", "-c", type=int, default=3, help="Number of clusters to load (default: 3)")
