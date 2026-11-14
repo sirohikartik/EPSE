@@ -40,6 +40,40 @@ class IndexStorage:
 
         # Record size in embeddings.bin: 4 bytes (uint32 id) + 4 * embedding_dim (float32s)
         self.record_size = 4 + 4 * self.embedding_dim
+        self._mmap: Optional[np.memmap] = None
+
+    def close(self) -> None:
+        """Closes any open memory-mapped file handles."""
+        if self._mmap is not None:
+            try:
+                # Flush and delete internal reference to allow unmapping
+                del self._mmap
+            except Exception:
+                pass
+            self._mmap = None
+
+    def __del__(self) -> None:
+        self.close()
+
+    def _get_mmap(self) -> Optional[np.memmap]:
+        """Returns cached memory-mapped array of embeddings.bin, or None if unavailable."""
+        if not os.path.exists(self.embeddings_bin):
+            return None
+        if self._mmap is None:
+            file_size = os.path.getsize(self.embeddings_bin)
+            if file_size == 0 or file_size % self.record_size != 0:
+                return None
+            record_dtype = np.dtype(
+                [("protein_id", np.uint32), ("embedding", np.float32, (self.embedding_dim,))]
+            )
+            num_records = file_size // self.record_size
+            self._mmap = np.memmap(
+                self.embeddings_bin,
+                dtype=record_dtype,
+                mode="r",
+                shape=(num_records,),
+            )
+        return self._mmap
 
     def save_index(
         self,
@@ -50,6 +84,7 @@ class IndexStorage:
         cluster_counts: Optional[np.ndarray] = None,
     ) -> None:
         """Saves full index files to disk in standard EPSE format."""
+        self.close()
         os.makedirs(self.data_dir, exist_ok=True)
         n = len(metadata_list)
         dim = embeddings.shape[1]
@@ -192,8 +227,23 @@ class IndexStorage:
         if not target_pids:
             return [], np.empty((0, self.embedding_dim), dtype=np.float32)
 
-        # Sort pids so nearby records can be fetched in one sequential read.
+        # Sort pids so records can be fetched efficiently.
         sorted_pids = sorted(set(target_pids))
+
+        # Fast path: memory-mapped zero-copy random access
+        mmap = self._get_mmap()
+        if mmap is not None:
+            pid_indices = np.array(sorted_pids, dtype=np.intp) - 1
+            valid_mask = (pid_indices >= 0) & (pid_indices < len(mmap))
+            if not np.all(valid_mask):
+                pid_indices = pid_indices[valid_mask]
+                sorted_pids = [sorted_pids[i] for i in range(len(sorted_pids)) if valid_mask[i]]
+            if len(pid_indices) == 0:
+                return [], np.empty((0, self.embedding_dim), dtype=np.float32)
+            embeddings = np.array(mmap[pid_indices]["embedding"], dtype=np.float32, copy=True)
+            return sorted_pids, embeddings
+
+        # Fallback: chunked sequential read
         embeddings = np.zeros((len(sorted_pids), self.embedding_dim), dtype=np.float32)
         record_dtype = np.dtype(
             [("protein_id", np.uint32), ("embedding", np.float32, (self.embedding_dim,))]

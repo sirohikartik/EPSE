@@ -54,3 +54,11 @@ def test_storage_save_and_selective_load(tmp_path):
     assert 4 in meta_dict
     assert meta_dict[4].accession == "PROT_4"
     assert meta_dict[4].organism == "Human"
+
+    # Verify memory mapping handles close and clean reload
+    assert storage._mmap is not None
+    storage.close()
+    assert storage._mmap is None
+    pids_reloaded, _ = storage.load_cluster_embeddings([0])
+    assert pids_reloaded == [1, 2, 3]
+    storage.close()
