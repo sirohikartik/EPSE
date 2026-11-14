@@ -29,6 +29,7 @@ class ProteinEmbedder:
         use_mock: bool = False,
         embedding_dim: int = DEFAULT_EMBEDDING_DIM,
         cache_size: int = 1024,
+        quantize: bool = False,
     ):
         """Initializes the CPU protein embedder.
 
@@ -39,6 +40,7 @@ class ProteinEmbedder:
             use_mock: If True, uses deterministic hash/n-gram embeddings for testing without downloading weights.
             embedding_dim: Embedding dimension (480 for esm2_t12_35M).
             cache_size: Maximum number of embeddings to keep in LRU cache (0 to disable).
+            quantize: If True, applies dynamic int8 quantization on Linear layers for accelerated CPU inference.
         """
         self.model_name = model_name
         self.device = torch.device("cpu")
@@ -46,6 +48,7 @@ class ProteinEmbedder:
         self.use_mock = use_mock
         self.embedding_dim = embedding_dim
         self.cache_size = max(0, int(cache_size))
+        self.quantize = quantize
         self._cache: OrderedDict[str, np.ndarray] = OrderedDict()
         self._model = None
         self._tokenizer = None
@@ -69,6 +72,20 @@ class ProteinEmbedder:
         # Update dimension from model configuration if available
         if hasattr(self._model.config, "hidden_size"):
             self.embedding_dim = self._model.config.hidden_size
+
+        if self.quantize:
+            try:
+                if (
+                    hasattr(torch.backends, "quantized")
+                    and "qnnpack" in torch.backends.quantized.supported_engines
+                ):
+                    torch.backends.quantized.engine = "qnnpack"
+                logger.info("Applying dynamic int8 quantization to model linear layers on CPU...")
+                self._model = torch.ao.quantization.quantize_dynamic(
+                    self._model, {torch.nn.Linear}, dtype=torch.qint8
+                )
+            except Exception as e:
+                logger.warning("Dynamic quantization failed; proceeding with fp32: %s", e)
 
     def _mock_embed(self, sequences: Sequence[str]) -> np.ndarray:
         """Generates deterministic pseudo-embeddings for testing without heavy model weights."""

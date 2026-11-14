@@ -59,3 +59,10 @@ def test_embedder_lru_cache():
     # Clear cache
     embedder.clear_cache()
     assert embedder.cache_size_current == 0
+
+
+def test_embedder_quantize_flag():
+    embedder = ProteinEmbedder(use_mock=True, embedding_dim=16, quantize=True)
+    assert embedder.quantize is True
+    emb = embedder.embed_single("MKTVR")
+    assert emb.shape == (16,)
