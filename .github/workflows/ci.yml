@@ -61,42 +61,25 @@ jobs:
         run: |
           html5validator --root .
 
-  ctest:
+  pytest:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake \
-            build-essential \
-            wget \
-            unzip
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Download LibTorch
-        run: |
-          wget -O libtorch.zip \
-            https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcpu.zip
+      - name: Install CPU PyTorch
+        run: >-
+          python -m pip install "torch==2.7.1+cpu"
+          --index-url https://download.pytorch.org/whl/cpu
+          --extra-index-url https://pypi.org/simple
 
-          unzip -q libtorch.zip
+      - name: Install package and test dependencies
+        run: python -m pip install -e ".[dev]"
 
-      - name: Configure
-        run: |
-          mkdir build
-          cd build
-
-          cmake .. \
-            -DCMAKE_PREFIX_PATH="$GITHUB_WORKSPACE/libtorch"
-
-      - name: Build
-        run: |
-          cd build
-          make -j$(nproc)
-
-      - name: Run tests
-        run: |
-          cd build
-          ctest --output-on-failure
+      - name: Run pytest suite
+        run: python -m pytest -q
