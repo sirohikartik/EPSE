@@ -120,7 +120,7 @@ class ProteinEmbedder:
             input_ids = inputs["input_ids"].to(self.device)
             attention_mask = inputs["attention_mask"].to(self.device)
 
-            with torch.no_grad():
+            with torch.inference_mode():
                 outputs = self._model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
