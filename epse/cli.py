@@ -59,6 +59,7 @@ def cmd_index(args: argparse.Namespace) -> int:
         num_threads=args.threads,
         normalize=True,
         use_mock=args.use_mock,
+        quantize=getattr(args, "quantize", False),
     )
     if args.batch_size <= 0:
         print("ERROR: batch size must be positive.", file=sys.stderr)
@@ -194,12 +195,13 @@ def cmd_search(args: argparse.Namespace) -> int:
         query_label = "CustomQuery"
 
     embedder = None
-    if query_vectors is None and isinstance(query_seq, str) or query_entries is not None:
+    if query_vectors is None and (isinstance(query_seq, str) or query_entries is not None):
         embedder = ProteinEmbedder(
             model_name=args.model_name,
             num_threads=args.threads,
             normalize=True,
             use_mock=args.use_mock,
+            quantize=getattr(args, "quantize", False),
         )
 
     search_engine = ProteinSearchEngine(data_dir=data_dir, embedder=embedder)
@@ -379,6 +381,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_index.add_argument("--model-name", default=DEFAULT_MODEL_NAME, help="ESM-2 model name")
     p_index.add_argument("--threads", type=int, default=None, help="CPU threads for PyTorch")
     p_index.add_argument("--seed", type=int, default=1234, help="Random seed for clustering")
+    p_index.add_argument("--quantize", action="store_true", help="Apply dynamic int8 quantization on CPU")
     p_index.add_argument("--use-mock", action="store_true", help="Use deterministic mock embeddings for testing")
     p_index.set_defaults(func=cmd_index)
 
@@ -393,6 +396,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("--model-name", default=DEFAULT_MODEL_NAME, help="ESM-2 model name")
     p_search.add_argument("--threads", type=int, default=None, help="CPU threads for PyTorch")
     p_search.add_argument("--batch-size", type=int, default=8, help="Sequences per embedding batch for multi-record FASTA queries")
+    p_search.add_argument("--quantize", action="store_true", help="Apply dynamic int8 quantization on CPU")
     p_search.add_argument("--use-mock", action="store_true", help="Use deterministic mock embeddings for testing")
     p_search.set_defaults(func=cmd_search)
 

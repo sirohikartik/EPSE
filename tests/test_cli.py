@@ -32,13 +32,14 @@ def test_cli_index_and_search_integration(tmp_path):
     assert os.path.exists(os.path.join(data_dir, "proteins.csv"))
     assert os.path.exists(os.path.join(data_dir, "centroids.csv"))
 
-    # Run search command with sequence
+    # Run search command with sequence and quantization flag
     args_search = parser.parse_args([
         "search",
         "MALWMRLLPLLALLALWGPDPAAA",
         "--data-dir", data_dir,
         "--top-k", "1",
         "--use-mock",
+        "--quantize",
         "--format", "json",
     ])
     code_search = args_search.func(args_search)
