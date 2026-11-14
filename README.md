@@ -192,6 +192,33 @@ for hit in hits:
     print(hit.rank, hit.accession, hit.score, hit.organism)
 ```
 
+## Search Evaluation
+
+EPSE was compared with DIAMOND 2.2.8, MMseqs2 18, and NCBI BLAST+ 2.17.0 on an 8 GB Apple Silicon Mac on 14 November 2026. The benchmark used the first 500 reviewed UniProt records returned for each of three organisms (*E. coli*, yeast, and human): the first 20 records were held out as queries, and the remaining 480 formed the search database. Search tools used one CPU thread; EPSE used ESM-2 `esm2_t12_35M_UR50D`, two PyTorch threads, E-Means with 20 clusters and one epoch, and returned the top 10 hits after loading three clusters.
+
+### Search cost
+
+| Tool | Search time per query | Peak search RAM |
+|---|---:|---:|
+| EPSE | 54–224 ms median | 495–551 MB |
+| DIAMOND `blastp` | 4–6 ms average | 12–13 MB |
+| MMseqs2 `easy-search` | 243–353 ms average | 711–728 MB |
+| NCBI BLASTP | 166–182 ms average | 46–48 MB |
+
+Competitor averages divide the wall time for a batch of 20 queries by 20; that time includes process startup and database loading. EPSE latency is the median per-query API time after model and index initialization, and includes query embedding. EPSE's 95th-percentile query latency ranged from 419 to 824 ms. Indexing took 205–224 seconds and peaked at 654–664 MB on the yeast and human subsets; those index timings were not retained for *E. coli*.
+
+### Result agreement
+
+Quality was measured as overlap with the top 10 BLASTP hits having E-value ≤ 1e-3. Top-1 is the fraction of those queries where the first result matched BLASTP's first significant hit. Only queries with at least one significant BLASTP hit are included.
+
+| Dataset | Significant queries | EPSE recall@10 / top-1 | DIAMOND recall@10 / top-1 | MMseqs2 recall@10 / top-1 |
+|---|---:|---:|---:|---:|
+| *E. coli* | 6 / 20 | 0.67 / 0.67 | 0.42 / 0.50 | 0.83 / 0.83 |
+| Yeast | 5 / 20 | 0.94 / 0.80 | 0.82 / 1.00 | 0.94 / 1.00 |
+| Human | 6 / 20 | 0.45 / 0.17 | 0.34 / 0.83 | 0.47 / 0.83 |
+
+These are small, exploratory subsets, and BLASTP is the reference rather than independent biological ground truth. EPSE ranks embedding similarity while the other tools perform sequence alignment, so their scores are not directly equivalent. This run shows that EPSE fits within 8 GB at this database size, but does not establish how its selective loading performs on large databases. Search time and memory can change substantially with database size, query composition, and tool settings.
+
 ## Running Tests
 
 Run the test suite across all modules:
