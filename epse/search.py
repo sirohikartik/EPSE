@@ -85,6 +85,9 @@ class ProteinSearchEngine:
         # Load centroids and inverted cluster index
         self.centroids, self.cluster_counts = self.storage.load_centroids()
         self.cluster_index = self.storage.load_cluster_index()
+        # Metadata is small compared with embeddings and is needed on every
+        # response. Parse it once instead of rescanning the CSV per query.
+        self._metadata = self.storage.load_protein_metadata()
 
         self.k, self.dim = self.centroids.shape
         self.storage.embedding_dim = self.dim
@@ -181,11 +184,9 @@ class ProteinSearchEngine:
         t_rank = time.perf_counter() - t0
 
         # Load metadata only for the top-K returned hits
-        metadata_map = self.storage.load_protein_metadata(top_pids)
-
         results: List[SearchResult] = []
         for rank, (pid, score) in enumerate(zip(top_pids, top_scores), start=1):
-            meta = metadata_map.get(pid)
+            meta = self._metadata.get(pid)
             results.append(
                 SearchResult(
                     rank=rank,

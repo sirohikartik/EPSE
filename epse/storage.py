@@ -182,22 +182,37 @@ class IndexStorage:
         if not target_pids:
             return [], np.empty((0, self.embedding_dim), dtype=np.float32)
 
-        # Sort pids for sequential disk access
+        # Sort pids so nearby records can be fetched in one sequential read.
         sorted_pids = sorted(set(target_pids))
         embeddings = np.zeros((len(sorted_pids), self.embedding_dim), dtype=np.float32)
+        record_dtype = np.dtype(
+            [("protein_id", np.uint32), ("embedding", np.float32, (self.embedding_dim,))]
+        )
+        max_gap_records = 8
 
         with open(self.embeddings_bin, "rb") as f:
-            for idx, pid in enumerate(sorted_pids):
-                # Offset calculation: protein_ids are 1-indexed
-                offset = (pid - 1) * self.record_size
+            run_start = 0
+            while run_start < len(sorted_pids):
+                run_end = run_start + 1
+                while (
+                    run_end < len(sorted_pids)
+                    and sorted_pids[run_end] - sorted_pids[run_end - 1] <= max_gap_records + 1
+                ):
+                    run_end += 1
+
+                first_pid = sorted_pids[run_start]
+                last_pid = sorted_pids[run_end - 1]
+                offset = (first_pid - 1) * self.record_size
                 f.seek(offset)
-                record = f.read(self.record_size)
-                if len(record) < self.record_size:
-                    continue
-                # Unpack: 4 bytes for pid, rest for floats
-                read_pid = struct.unpack_from("I", record, 0)[0]
-                vec = np.frombuffer(record[4:], dtype=np.float32)
-                embeddings[idx] = vec
+                raw = f.read((last_pid - first_pid + 1) * self.record_size)
+                records = np.frombuffer(raw, dtype=record_dtype)
+
+                for out_idx in range(run_start, run_end):
+                    record_idx = sorted_pids[out_idx] - first_pid
+                    if record_idx < len(records):
+                        embeddings[out_idx] = records[record_idx]["embedding"]
+
+                run_start = run_end
 
         return sorted_pids, embeddings
 
